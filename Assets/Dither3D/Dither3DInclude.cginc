@@ -10,9 +10,11 @@ sampler3D _DitherTex;
 sampler2D _DitherRampTex;
 sampler2D _BlueNoiseRankTex;
 sampler2D _BlueNoisePhaseTex;
+sampler2D _PointillismLUTTex;
 float4 _DitherTex_TexelSize;
 float4 _BlueNoiseRankTex_TexelSize;
 float4 _BlueNoisePhaseTex_TexelSize;
+float4 _PointillismLUTTex_TexelSize;
 float _Scale;
 float _SizeVariability;
 float _Contrast;
@@ -23,6 +25,13 @@ float _DitherPatternSource;
 float _BlueNoisePhaseSpeed;
 float _BlueNoiseHysteresis;
 float _BlueNoiseMinDot;
+float _PointillismEnable;
+float _PointillismDirectionality;
+float _PointillismStrokeLength;
+float _PointillismColorSteps;
+float4 _PointillismClampMinColor;
+float4 _PointillismClampMaxColor;
+float _PointillismLUTBlend;
 
 float2 HashBlueNoiseOffset(float n)
 {
@@ -41,6 +50,64 @@ fixed SampleBlueNoiseRank(float2 uv, float phaseIndex, float phaseTexBlend)
 static const float MIN_CONTRAST_EPSILON = 0.0001;
 static const float MIN_DOT_CONTRAST_REDUCTION_FACTOR = 0.75;
 static const float MIN_VALID_TEXTURE_SIZE = 1.5;
+static const float MIN_POINTILLISM_RANGE = 0.0001;
+
+fixed SampleTemporalRankWithFallback(float2 uvBlue, float phaseOffset)
+{
+    float phaseTime = max(0.0, _Time.y * _BlueNoisePhaseSpeed);
+    float phaseIdx = floor(phaseTime);
+    float phaseFrac = frac(phaseTime);
+    float stickiness = saturate(_BlueNoiseHysteresis);
+    float phaseBlend = saturate((phaseFrac - stickiness) / max(MIN_CONTRAST_EPSILON, 1.0 - stickiness));
+    float hasPhaseTex = step(MIN_VALID_TEXTURE_SIZE, _BlueNoisePhaseTex_TexelSize.z);
+    float hasRankTex = step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
+
+    fixed rankA = SampleBlueNoiseRank(uvBlue, phaseIdx + phaseOffset, hasPhaseTex);
+    fixed rankB = SampleBlueNoiseRank(uvBlue, phaseIdx + 1.0 + phaseOffset, hasPhaseTex);
+    fixed rank = lerp(rankA, rankB, phaseBlend);
+
+    fixed hashRank = frac(sin(dot(uvBlue + phaseOffset, float2(12.9898, 78.233))) * 43758.5453);
+    return lerp(hashRank, rank, hasRankTex);
+}
+
+fixed3 ApplyPointillismColor(float2 uv_DitherTex, float2 dx, float2 dy, fixed3 color)
+{
+    fixed3 clampMin = saturate(_PointillismClampMinColor.rgb);
+    fixed3 clampMax = max(clampMin, saturate(_PointillismClampMaxColor.rgb));
+    fixed3 clampRange = max(fixed3(MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE), clampMax - clampMin);
+    fixed3 clamped = clamp(color, clampMin, clampMax);
+    fixed3 normalized = saturate((clamped - clampMin) / clampRange);
+
+    float steps = max(2.0, _PointillismColorSteps);
+    fixed3 scaled = normalized * (steps - 1.0);
+    fixed3 low = floor(scaled) / (steps - 1.0);
+    fixed3 high = ceil(scaled) / (steps - 1.0);
+    fixed3 fracPart = frac(scaled);
+
+    float2 mainDir = dot(dx, dx) > dot(dy, dy) ? dx : dy;
+    mainDir = dot(mainDir, mainDir) > MIN_CONTRAST_EPSILON ? normalize(mainDir) : float2(1.0, 0.0);
+    float2 orthoDir = float2(-mainDir.y, mainDir.x);
+    float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
+
+    float2 uvBase = frac(uv_DitherTex);
+    fixed3 ranks = fixed3(
+        SampleTemporalRankWithFallback(frac(uvBase + orthoDir * spread), 0.0),
+        SampleTemporalRankWithFallback(frac(uvBase - orthoDir * spread), 0.37),
+        SampleTemporalRankWithFallback(frac(uvBase + mainDir * spread * 0.6), 0.73)
+    );
+
+    fixed3 dithered = lerp(low, high, step(ranks, fracPart));
+    fixed3 remapped = saturate(clampMin + dithered * clampRange);
+
+    float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
+    float lutBlend = saturate(_PointillismLUTBlend) * hasLut;
+    fixed3 lutColor = fixed3(
+        tex2D(_PointillismLUTTex, float2(remapped.r, 0.5)).r,
+        tex2D(_PointillismLUTTex, float2(remapped.g, 0.5)).g,
+        tex2D(_PointillismLUTTex, float2(remapped.b, 0.5)).b
+    );
+    return saturate(lerp(remapped, lutColor, lutBlend));
+}
 
 // dx is the delta in u and v coordinates along the screen X axis.
 // dy is the delta in u and v coordinates along the screen Y axis.
@@ -223,16 +290,7 @@ fixed4 GetDither3D_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy,
 
     float blueNoiseBlendFactor = step(0.5, _DitherPatternSource) * step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
     float2 uvBlue = frac(uv);
-    float phaseTime = max(0.0, _Time.y * _BlueNoisePhaseSpeed);
-    float phaseIdx = floor(phaseTime);
-    float phaseFrac = frac(phaseTime);
-    float stickiness = saturate(_BlueNoiseHysteresis);
-    float phaseBlend = saturate((phaseFrac - stickiness) / max(MIN_CONTRAST_EPSILON, 1.0 - stickiness));
-    float hasPhaseTex = step(MIN_VALID_TEXTURE_SIZE, _BlueNoisePhaseTex_TexelSize.z);
-
-    fixed rankA = SampleBlueNoiseRank(uvBlue, phaseIdx, hasPhaseTex);
-    fixed rankB = SampleBlueNoiseRank(uvBlue, phaseIdx + 1.0, hasPhaseTex);
-    fixed rank = lerp(rankA, rankB, phaseBlend);
+    fixed rank = SampleTemporalRankWithFallback(uvBlue, 0.0);
 
     fixed blueThreshold = 1 - brightnessCurve;
     // Scale contrast down as minimum-dot increases so tiny dots stay present longer.
@@ -335,6 +393,11 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float4 screenPos, float2 dx, float
         cmyk.w = GetDither3D_(RotateUV(uv_DitherTex, float2(0.707, 0.707)), screenPos, dx, dy, cmyk.w).x;
         color.rgb = CMYKtoRGB(cmyk);
     #endif
+
+    if (_PointillismEnable > 0.5)
+    {
+        color.rgb = ApplyPointillismColor(uv_DitherTex, dx, dy, color.rgb);
+    }
 
     return color;
 }
