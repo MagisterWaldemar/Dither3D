@@ -45,7 +45,9 @@ Shader "Dither 3D/Cutout"
         _PointillismDirectionality ("Stroke Directionality", Range(0,1)) = 0.5
         _PointillismStrokeLength ("Stroke Length", Range(0,1)) = 0.4
         _PointillismColorSteps ("Color Steps", Range(2,32)) = 8
-        [Enum(UV,0,AltUVHook,1)] _PointillismCoordSource ("Pointillism Coord Source", Float) = 0
+        [Enum(UV,0,AltUVHook,1,ObjectSpace,2,TriplanarObjectSpace,3)] _PointillismCoordSource ("Pointillism Coord Source", Float) = 0
+        _PointillismObjectScale ("Pointillism Object Scale", Range(0.1,32)) = 1
+        _PointillismTriplanarSharpness ("Pointillism Triplanar Sharpness", Range(1,8)) = 4
         _PointillismClampMinColor ("Clamp Min Color", Color) = (0,0,0,0)
         _PointillismClampMaxColor ("Clamp Max Color", Color) = (1,1,1,1)
         _PointillismLUTTex ("Pointillism LUT (Optional)", 2D) = "white" {}
@@ -81,6 +83,8 @@ Shader "Dither 3D/Cutout"
             float2 uv_EmissionMap;
             float2 uv_DitherTex;
             float4 screenPos;
+            float3 worldPos;
+            float3 worldNormal;
             UNITY_FOG_COORDS(4)
         };
 
@@ -110,7 +114,7 @@ Shader "Dither 3D/Cutout"
         void mycolor (Input IN, SurfaceOutputStandard o, inout fixed4 color)
         {
             UNITY_APPLY_FOG(IN.fogCoord, color);
-            color = GetDither3DColor(IN.uv_DitherTex, IN.screenPos, color);
+            color = GetDither3DColorWorld(IN.uv_DitherTex, IN.uv_MainTex, IN.worldPos, IN.worldNormal, IN.screenPos, color);
         }
         ENDCG
     }

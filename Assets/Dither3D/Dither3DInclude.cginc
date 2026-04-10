@@ -33,6 +33,8 @@ float4 _PointillismClampMinColor;
 float4 _PointillismClampMaxColor;
 float _PointillismLUTBlend;
 float _PointillismCoordSource;
+float _PointillismObjectScale;
+float _PointillismTriplanarSharpness;
 
 float2 HashBlueNoiseOffset(float n)
 {
@@ -108,6 +110,43 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
         tex2D(_PointillismLUTTex, float2(remapped.b, 0.5)).b
     );
     return saturate(lerp(remapped, lutColor, lutBlend));
+}
+
+float2 ResolvePointillismUV(float2 uvDither, float2 uvAlt, float3 worldPos, float3 worldNormal, float hasWorldData)
+{
+    float source = floor(_PointillismCoordSource + 0.5);
+
+    if (source < 0.5)
+        return uvDither;
+
+    if (source < 1.5)
+        return uvAlt;
+
+    if (hasWorldData < 0.5)
+        return uvDither;
+
+    float3 objectPos = mul(unity_WorldToObject, float4(worldPos, 1.0)).xyz;
+    float objectScale = max(MIN_CONTRAST_EPSILON, _PointillismObjectScale);
+    objectPos *= objectScale;
+
+    if (source < 2.5)
+        return objectPos.xz;
+
+    float3 objectNormal = mul((float3x3)unity_WorldToObject, worldNormal);
+    float normalLen = length(objectNormal);
+    if (normalLen <= MIN_CONTRAST_EPSILON)
+        return objectPos.xz;
+
+    float3 normalAbs = abs(objectNormal / normalLen);
+    float sharpness = max(1.0, _PointillismTriplanarSharpness);
+    float3 weights = pow(normalAbs, sharpness);
+    float weightSum = weights.x + weights.y + weights.z;
+    weights /= max(MIN_CONTRAST_EPSILON, weightSum);
+
+    float2 uvX = objectPos.yz;
+    float2 uvY = objectPos.xz;
+    float2 uvZ = objectPos.xy;
+    return uvX * weights.x + uvY * weights.y + uvZ * weights.z;
 }
 
 // dx is the delta in u and v coordinates along the screen X axis.
@@ -403,12 +442,25 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 scree
     return color;
 }
 
+fixed4 GetDither3DColorWorld(float2 uv_DitherTex, float2 uv_DitherTexAlt, float3 worldPos, float3 worldNormal, float4 screenPos, fixed4 color)
+{
+    float2 dxA = ddx(uv_DitherTex);
+    float2 dyA = ddy(uv_DitherTex);
+    float2 dxB = ddx(uv_DitherTexAlt);
+    float2 dyB = ddy(uv_DitherTexAlt);
+    float2 dx = dot(dxA, dxA) < dot(dxB, dxB) ? dxA : dxB;
+    float2 dy = dot(dyA, dyA) < dot(dyB, dyB) ? dyA : dyB;
+    float2 uvPointillism = ResolvePointillismUV(uv_DitherTex, uv_DitherTexAlt, worldPos, worldNormal, 1.0);
+    return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color);
+}
+
 fixed4 GetDither3DColor(float2 uv_DitherTex, float4 screenPos, fixed4 color)
 {
     // Get the rates of change of the UV coordinates.
     float2 dx = ddx(uv_DitherTex);
     float2 dy = ddy(uv_DitherTex);
-    return GetDither3DColor_(uv_DitherTex, uv_DitherTex, screenPos, dx, dy, color);
+    float2 uvPointillism = ResolvePointillismUV(uv_DitherTex, uv_DitherTex, float3(0, 0, 0), float3(0, 1, 0), 0.0);
+    return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color);
 }
 
 fixed4 GetDither3DColorAltUV(float2 uv_DitherTex, float2 uv_DitherTexAlt, float4 screenPos, fixed4 color)
@@ -422,7 +474,6 @@ fixed4 GetDither3DColorAltUV(float2 uv_DitherTex, float2 uv_DitherTexAlt, float4
     float2 dyB = ddy(uv_DitherTexAlt);
     float2 dx = dot(dxA, dxA) < dot(dxB, dxB) ? dxA : dxB;
     float2 dy = dot(dyA, dyA) < dot(dyB, dyB) ? dyA : dyB;
-    float useAltUVForPointillism = step(0.5, _PointillismCoordSource);
-    float2 uvPointillism = lerp(uv_DitherTex, uv_DitherTexAlt, useAltUVForPointillism);
+    float2 uvPointillism = ResolvePointillismUV(uv_DitherTex, uv_DitherTexAlt, float3(0, 0, 0), float3(0, 1, 0), 0.0);
     return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color);
 }

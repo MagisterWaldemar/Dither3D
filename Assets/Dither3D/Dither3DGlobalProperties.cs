@@ -18,6 +18,7 @@ public class Dither3DGlobalProperties : MonoBehaviour
 
     public enum DitherColorMode { Grayscale, RGB, CMYK }
     public enum DitherTemporalPreset { Conservative, Balanced, Aggressive }
+    public enum PointillismPreset { Conservative, Balanced, Aggressive }
 
     [Header("Global Options")]
     public DitherColorMode colorMode;
@@ -77,6 +78,9 @@ public class Dither3DGlobalProperties : MonoBehaviour
     [OverrideProperty] public bool pointillismEnable;
     [HideInInspector] public bool pointillismEnableOverride;
 
+    [OverrideProperty] public PointillismPreset pointillismPreset = PointillismPreset.Balanced;
+    [HideInInspector] public bool pointillismPresetOverride;
+
     [OverrideProperty] public float pointillismDirectionality = 0.5f;
     [HideInInspector] public bool pointillismDirectionalityOverride;
 
@@ -88,6 +92,12 @@ public class Dither3DGlobalProperties : MonoBehaviour
 
     [OverrideProperty] public float pointillismCoordSource;
     [HideInInspector] public bool pointillismCoordSourceOverride;
+
+    [OverrideProperty] public float pointillismObjectScale = 1f;
+    [HideInInspector] public bool pointillismObjectScaleOverride;
+
+    [OverrideProperty] public float pointillismTriplanarSharpness = 4f;
+    [HideInInspector] public bool pointillismTriplanarSharpnessOverride;
 
     [OverrideProperty] public Color pointillismClampMinColor = Color.black;
     [HideInInspector] public bool pointillismClampMinColorOverride;
@@ -191,6 +201,27 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_BlueNoiseMinDot", blueNoiseMinDot, ref changed);
         if (pointillismEnableOverride)
             SetShaderOverride("_PointillismEnable", pointillismEnable ? 1f : 0f, ref changed);
+        if (pointillismPresetOverride)
+        {
+            GetPointillismPresetValues(
+                pointillismPreset,
+                out float presetDirectionality,
+                out float presetStrokeLength,
+                out float presetColorSteps,
+                out Color presetClampMin,
+                out Color presetClampMax,
+                out float presetPhaseSpeed,
+                out float presetHysteresis,
+                out float presetMinDot);
+            SetShaderOverride("_PointillismDirectionality", presetDirectionality, ref changed);
+            SetShaderOverride("_PointillismStrokeLength", presetStrokeLength, ref changed);
+            SetShaderOverride("_PointillismColorSteps", presetColorSteps, ref changed);
+            SetShaderColorOverride("_PointillismClampMinColor", presetClampMin, ref changed);
+            SetShaderColorOverride("_PointillismClampMaxColor", presetClampMax, ref changed);
+            SetShaderOverride("_BlueNoisePhaseSpeed", presetPhaseSpeed, ref changed);
+            SetShaderOverride("_BlueNoiseHysteresis", presetHysteresis, ref changed);
+            SetShaderOverride("_BlueNoiseMinDot", presetMinDot, ref changed);
+        }
         if (pointillismDirectionalityOverride)
             SetShaderOverride("_PointillismDirectionality", pointillismDirectionality, ref changed);
         if (pointillismStrokeLengthOverride)
@@ -199,6 +230,10 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_PointillismColorSteps", pointillismColorSteps, ref changed);
         if (pointillismCoordSourceOverride)
             SetShaderOverride("_PointillismCoordSource", pointillismCoordSource, ref changed);
+        if (pointillismObjectScaleOverride)
+            SetShaderOverride("_PointillismObjectScale", pointillismObjectScale, ref changed);
+        if (pointillismTriplanarSharpnessOverride)
+            SetShaderOverride("_PointillismTriplanarSharpness", pointillismTriplanarSharpness, ref changed);
         if (pointillismClampMinColorOverride)
             SetShaderColorOverride("_PointillismClampMinColor", pointillismClampMinColor, ref changed);
         if (pointillismClampMaxColorOverride)
@@ -270,6 +305,52 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 minDot = 0.04f;
                 break;
             default:
+                phaseSpeed = 0.15f;
+                hysteresis = 0.80f;
+                minDot = 0.12f;
+                break;
+        }
+    }
+
+    static void GetPointillismPresetValues(
+        PointillismPreset preset,
+        out float directionality,
+        out float strokeLength,
+        out float colorSteps,
+        out Color clampMin,
+        out Color clampMax,
+        out float phaseSpeed,
+        out float hysteresis,
+        out float minDot)
+    {
+        switch (preset)
+        {
+            case PointillismPreset.Conservative:
+                directionality = 0.35f;
+                strokeLength = 0.25f;
+                colorSteps = 6f;
+                clampMin = new Color(0.05f, 0.05f, 0.05f, 1f);
+                clampMax = new Color(0.95f, 0.95f, 0.95f, 1f);
+                phaseSpeed = 0.08f;
+                hysteresis = 0.90f;
+                minDot = 0.18f;
+                break;
+            case PointillismPreset.Aggressive:
+                directionality = 0.80f;
+                strokeLength = 0.70f;
+                colorSteps = 12f;
+                clampMin = Color.black;
+                clampMax = Color.white;
+                phaseSpeed = 0.45f;
+                hysteresis = 0.45f;
+                minDot = 0.04f;
+                break;
+            default:
+                directionality = 0.50f;
+                strokeLength = 0.40f;
+                colorSteps = 8f;
+                clampMin = Color.black;
+                clampMax = Color.white;
                 phaseSpeed = 0.15f;
                 hysteresis = 0.80f;
                 minDot = 0.12f;
