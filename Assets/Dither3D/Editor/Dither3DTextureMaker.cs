@@ -411,7 +411,7 @@ public class Dither3DTextureMaker : MonoBehaviour
         {
             name = "DefaultTexturePlatform",
             overridden = true,
-            format = TextureImporterFormat.RGBA32
+            format = TextureImporterFormat.RGB24
         };
         importer.SetPlatformTextureSettings(settings);
         importer.textureCompression = TextureImporterCompression.Uncompressed;

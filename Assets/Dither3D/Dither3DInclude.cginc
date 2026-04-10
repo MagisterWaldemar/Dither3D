@@ -71,7 +71,7 @@ fixed SampleTemporalRankWithFallback(float2 uvBlue, float phaseOffset)
     return lerp(hashRank, rank, hasRankTex);
 }
 
-fixed3 ApplyPointillismColor(float2 uv_Pointillism, float2 dx, float2 dy, fixed3 color)
+fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 color)
 {
     fixed3 clampMin = saturate(_PointillismClampMinColor.rgb);
     fixed3 clampMax = max(clampMin, saturate(_PointillismClampMaxColor.rgb));
@@ -90,7 +90,7 @@ fixed3 ApplyPointillismColor(float2 uv_Pointillism, float2 dx, float2 dy, fixed3
     float2 orthoDir = float2(-mainDir.y, mainDir.x);
     float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
 
-    float2 uvBase = frac(uv_Pointillism);
+    float2 uvBase = frac(uvPointillism);
     fixed3 ranks = fixed3(
         SampleTemporalRankWithFallback(frac(uvBase + orthoDir * spread), 0.0),
         SampleTemporalRankWithFallback(frac(uvBase - orthoDir * spread), 0.37),
@@ -369,7 +369,7 @@ float2 RotateUV(float2 uv, float2 xUnitDir)
     return uv.x * xUnitDir + uv.y * float2(-xUnitDir.y, xUnitDir.x);
 }
 
-fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uv_Pointillism, float4 screenPos, float2 dx, float2 dy, fixed4 color)
+fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 screenPos, float2 dx, float2 dy, fixed4 color)
 {
     // Adjust brightness according to shader exposure and offset properties.
     color.rgb = saturate(color.rgb * _InputExposure + _InputOffset);
@@ -397,7 +397,7 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uv_Pointillism, float4 scre
 
     if (_PointillismEnable > 0.5)
     {
-        color.rgb = ApplyPointillismColor(uv_Pointillism, dx, dy, color.rgb);
+        color.rgb = ApplyPointillismColor(uvPointillism, dx, dy, color.rgb);
     }
 
     return color;
