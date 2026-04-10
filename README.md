@@ -240,7 +240,6 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 
 - Add direct support for phase texture arrays/atlases.
 - Add runtime visual debug overlays for phase blend and hysteresis response.
-- Add dedicated pointillism preset asset profiles (palette + directionality + temporal grouping).
 
 ## Discussion of surface-stable trait
 

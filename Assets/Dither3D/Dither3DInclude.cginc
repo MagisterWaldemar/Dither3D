@@ -90,9 +90,12 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
     float2 selectedDir = dot(dx, dx) > dot(dy, dy) ? dx : dy;
     float2 mainDir = dot(selectedDir, selectedDir) > MIN_CONTRAST_EPSILON ? normalize(selectedDir) : float2(1.0, 0.0);
     float2 orthoDir = float2(-mainDir.y, mainDir.x);
+    // Keep a small base spread so pointillism variation remains visible even with low stroke length.
+    // The remaining spread range is controlled by stroke length for directional stroke tuning.
     float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
 
     float2 uvBase = frac(uvPointillism);
+    // Phase offsets are deliberately non-harmonic to decorrelate per-channel rank samples.
     fixed3 ranks = fixed3(
         SampleTemporalRankWithFallback(frac(uvBase + orthoDir * spread), 0.0),
         SampleTemporalRankWithFallback(frac(uvBase - orthoDir * spread), 0.37),
