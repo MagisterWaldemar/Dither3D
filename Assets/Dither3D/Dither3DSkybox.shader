@@ -32,6 +32,14 @@ Shader "Dither 3D/Skybox (6 Sided)"
         _SizeVariability ("Dot Size Variability", Range(0,1)) = 0
         _Contrast ("Dot Contrast", Range(0,2)) = 1
         _StretchSmoothness ("Stretch Smoothness", Range(0,2)) = 1
+        [Space]
+        [Header(Blue Noise Fractal (Optional))]
+        [Enum(Bayer,0,BlueNoiseFractal,1)] _DitherPatternSource ("Pattern Source", Float) = 0
+        _BlueNoiseRankTex ("Blue Noise Rank Texture", 2D) = "gray" {}
+        _BlueNoisePhaseTex ("Blue Noise Phase Texture (Optional)", 2D) = "black" {}
+        _BlueNoisePhaseSpeed ("Blue Noise Phase Speed", Range(0,1)) = 0.15
+        _BlueNoiseHysteresis ("Blue Noise Hysteresis", Range(0,1)) = 0.8
+        _BlueNoiseMinDot ("Blue Noise Min Dot", Range(0,1)) = 0.12
     }
 
     SubShader

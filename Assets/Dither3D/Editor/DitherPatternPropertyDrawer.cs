@@ -8,7 +8,7 @@ public class DitherPatternPropertyDrawer : MaterialPropertyDrawer
     static readonly int[] s_PopupValues = {0, 1, 2, 3};
     public override void OnGUI (Rect position, MaterialProperty prop, string label, MaterialEditor editor)
     {
-        int value = (int)prop.floatValue;
+        int value = Mathf.Clamp((int)prop.floatValue, s_PopupValues[0], s_PopupValues[s_PopupValues.Length - 1]);
         EditorGUI.BeginChangeCheck();
         EditorGUI.showMixedValue = prop.hasMixedValue;
         value = EditorGUI.IntPopup(position, new GUIContent(label), value, s_PopupNames, s_PopupValues);
@@ -41,7 +41,11 @@ public class DitherPatternPropertyDrawer : MaterialPropertyDrawer
             if (ditherTex != null)
             {
                 foreach (Material mat in editor.targets)
+                {
                     mat.SetTexture("_DitherTex", ditherTex);
+                    if (mat.HasProperty("_DitherPatternSource") && mat.HasProperty("_BlueNoiseRankTex") && mat.GetTexture("_BlueNoiseRankTex") == null)
+                        mat.SetFloat("_DitherPatternSource", 0f);
+                }
             }
             if (ditherRampTex != null)
             {

@@ -7,12 +7,17 @@
  */
 
 using System.Collections.Generic;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 
 public class Dither3DTextureMaker : MonoBehaviour
 {
     internal const string kTexturesPath = "Assets/Dither3D";
+    internal const int kMinCandidateCount = 4;
+    internal const int kMaxCandidateCount = 64;
+    internal const int kMaxPhaseCount = 16;
+    internal const int kPhaseSeedMultiplier = 977;
 
     [MenuItem("Assets/Create/Dither 3D Texture/Bayer 1x1")]
     static void CreateDither3DTexture1x1()
@@ -157,7 +162,7 @@ public class Dither3DTextureMaker : MonoBehaviour
         texture.SetPixels(colors);
         texture.Apply();
         string name = "Dither3D_" + dotsPerSide + "x" + dotsPerSide;
-        AssetDatabase.CreateAsset(texture, $"{kTexturesPath}/{name}/.asset");
+        AssetDatabase.CreateAsset(texture, $"{kTexturesPath}/{name}.asset");
 
         // Create 2D texture for inspection and debugging.
         // (Some versions of Unity can supposedly also create
@@ -167,7 +172,9 @@ public class Dither3DTextureMaker : MonoBehaviour
         tex.SetPixels(colors);
         tex.Apply();
         byte[] bytes = tex.EncodeToPNG();
-        System.IO.File.WriteAllBytes($"{kTexturesPath}/{name}/.png", bytes);
+        string debugPath = $"{kTexturesPath}/{name}.png";
+        File.WriteAllBytes(debugPath, bytes);
+        AssetDatabase.ImportAsset(debugPath, ImportAssetOptions.ForceUpdate);
 
         // Create ramp texture
         CreateRampTexture($"Dither3D_{dotsPerSide}x{dotsPerSide}_Ramp", lookupRamp);
@@ -204,5 +211,225 @@ public class Dither3DTextureMaker : MonoBehaviour
         importer.wrapMode = TextureWrapMode.Clamp;
         importer.anisoLevel = 0;
         importer.SaveAndReimport();
+    }
+
+    [MenuItem("Tools/Dither 3D/Blue Noise Fractal Generator")]
+    static void OpenBlueNoiseGenerator()
+    {
+        Dither3DBlueNoiseGeneratorWindow.ShowWindow();
+    }
+
+    internal static void GenerateBlueNoiseRankTexture(string outputName, int size, int seed, int candidateCount)
+    {
+        if (size <= 1)
+            size = 64;
+
+        outputName = string.IsNullOrEmpty(outputName) ? "Dither3D_BlueNoiseRank" : outputName;
+        int pixelCount = size * size;
+        candidateCount = Mathf.Clamp(candidateCount, kMinCandidateCount, kMaxCandidateCount);
+
+        Color32[] pixels = new Color32[pixelCount];
+        bool[] occupied = new bool[pixelCount];
+        List<Vector2Int> selected = new List<Vector2Int>(pixelCount);
+        System.Random random = new System.Random(seed);
+        float rankDenominator = Mathf.Max(1, pixelCount - 1);
+
+        for (int i = 0; i < pixelCount; i++)
+        {
+            float progress = i / (float)pixelCount;
+            EditorUtility.DisplayProgressBar("Blue Noise Generator", "Generating rank order", progress);
+
+            int bestIndex = -1;
+            float bestDistance = -1f;
+
+            int probeCount = i == 0 ? 1 : candidateCount;
+            for (int p = 0; p < probeCount; p++)
+            {
+                int candidateIndex = random.Next(pixelCount);
+                int tries = 0;
+                while (occupied[candidateIndex] && tries++ < pixelCount)
+                    candidateIndex = (candidateIndex + 1) % pixelCount;
+
+                if (occupied[candidateIndex])
+                    continue;
+
+                if (i == 0)
+                {
+                    bestIndex = candidateIndex;
+                    break;
+                }
+
+                Vector2Int candidate = new Vector2Int(candidateIndex % size, candidateIndex / size);
+                float nearest = float.MaxValue;
+                for (int s = 0; s < selected.Count; s++)
+                {
+                    float dist = ToroidalDistanceSquared(candidate, selected[s], size);
+                    if (dist < nearest)
+                        nearest = dist;
+                }
+
+                if (nearest > bestDistance)
+                {
+                    bestDistance = nearest;
+                    bestIndex = candidateIndex;
+                }
+            }
+
+            if (bestIndex < 0)
+            {
+                for (int j = 0; j < pixelCount; j++)
+                {
+                    if (!occupied[j])
+                    {
+                        bestIndex = j;
+                        break;
+                    }
+                }
+            }
+
+            occupied[bestIndex] = true;
+            Vector2Int chosen = new Vector2Int(bestIndex % size, bestIndex / size);
+            selected.Add(chosen);
+
+            byte rank = (byte)Mathf.RoundToInt((255f * i) / rankDenominator);
+            pixels[bestIndex] = new Color32(rank, rank, rank, 255);
+        }
+
+        Texture2D rankTexture = new Texture2D(size, size, TextureFormat.R8, false);
+        rankTexture.SetPixels32(pixels);
+        rankTexture.Apply(false, true);
+
+        string path = $"{kTexturesPath}/{outputName}.png";
+        File.WriteAllBytes(path, rankTexture.EncodeToPNG());
+        Object.DestroyImmediate(rankTexture);
+        AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+        ConfigureBlueNoiseImport(path);
+        EditorUtility.ClearProgressBar();
+        AssetDatabase.Refresh();
+    }
+
+    internal static void GenerateBlueNoisePhaseTextures(string outputPrefix, int size, int seed, int phaseCount)
+    {
+        phaseCount = Mathf.Clamp(phaseCount, 0, kMaxPhaseCount);
+        if (phaseCount <= 0)
+            return;
+
+        outputPrefix = string.IsNullOrEmpty(outputPrefix) ? "Dither3D_BlueNoisePhase" : outputPrefix;
+        size = Mathf.Max(2, size);
+
+        for (int phase = 0; phase < phaseCount; phase++)
+        {
+            System.Random random = new System.Random(seed ^ (phase * kPhaseSeedMultiplier));
+            Color32[] pixels = new Color32[size * size];
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                byte value = (byte)random.Next(0, 256);
+                pixels[i] = new Color32(value, value, value, 255);
+            }
+
+            Texture2D tex = new Texture2D(size, size, TextureFormat.R8, false);
+            tex.SetPixels32(pixels);
+            tex.Apply(false, true);
+            string path = $"{kTexturesPath}/{outputPrefix}_{phase:00}.png";
+            File.WriteAllBytes(path, tex.EncodeToPNG());
+            Object.DestroyImmediate(tex);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            ConfigureBlueNoiseImport(path);
+        }
+
+        AssetDatabase.Refresh();
+    }
+
+    static float ToroidalDistanceSquared(Vector2Int a, Vector2Int b, int size)
+    {
+        int dx = Mathf.Abs(a.x - b.x);
+        int dy = Mathf.Abs(a.y - b.y);
+        dx = Mathf.Min(dx, size - dx);
+        dy = Mathf.Min(dy, size - dy);
+        return dx * dx + dy * dy;
+    }
+
+    internal static void ConfigureBlueNoiseImport(string path)
+    {
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null)
+            return;
+
+        TextureImporterPlatformSettings settings = new TextureImporterPlatformSettings
+        {
+            name = "DefaultTexturePlatform",
+            overridden = true,
+            format = TextureImporterFormat.R8
+        };
+        importer.SetPlatformTextureSettings(settings);
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.sRGBTexture = false;
+        importer.mipmapEnabled = false;
+        importer.filterMode = FilterMode.Point;
+        importer.wrapMode = TextureWrapMode.Repeat;
+        importer.anisoLevel = 0;
+        importer.alphaSource = TextureImporterAlphaSource.None;
+        importer.SaveAndReimport();
+    }
+}
+
+public class Dither3DBlueNoiseGeneratorWindow : EditorWindow
+{
+    string outputName = "Dither3D_BlueNoiseRank";
+    int textureSize = 64;
+    int seed = 12345;
+    int candidateCount = 12;
+
+    bool generatePhaseSet;
+    string phasePrefix = "Dither3D_BlueNoisePhase";
+    int phaseCount = 4;
+
+    public static void ShowWindow()
+    {
+        var window = GetWindow<Dither3DBlueNoiseGeneratorWindow>("Blue Noise Generator");
+        window.minSize = new Vector2(360, 250);
+        window.Show();
+    }
+
+    void OnGUI()
+    {
+        EditorGUILayout.LabelField("Blue Noise Fractal Texture Generator", EditorStyles.boldLabel);
+        EditorGUILayout.Space();
+
+        outputName = EditorGUILayout.TextField("Rank Texture Name", outputName);
+        textureSize = EditorGUILayout.IntPopup("Size", textureSize, new[] { "32", "64", "128" }, new[] { 32, 64, 128 });
+        seed = EditorGUILayout.IntField("Seed", seed);
+        candidateCount = EditorGUILayout.IntSlider(
+            "Candidate Count",
+            candidateCount,
+            Dither3DTextureMaker.kMinCandidateCount,
+            Dither3DTextureMaker.kMaxCandidateCount);
+
+        EditorGUILayout.Space();
+        generatePhaseSet = EditorGUILayout.Toggle("Generate Phase Set", generatePhaseSet);
+        using (new EditorGUI.DisabledScope(!generatePhaseSet))
+        {
+            phasePrefix = EditorGUILayout.TextField("Phase Prefix", phasePrefix);
+            phaseCount = EditorGUILayout.IntSlider("Phase Count", phaseCount, 1, Dither3DTextureMaker.kMaxPhaseCount);
+        }
+
+        EditorGUILayout.Space();
+        EditorGUILayout.HelpBox(
+            "Generated textures are imported as linear, no mipmaps, uncompressed, repeat wrap, and point filter.",
+            MessageType.Info);
+
+        if (GUILayout.Button("Generate Blue Noise Textures"))
+        {
+            try
+            {
+                Dither3DTextureMaker.GenerateBlueNoiseRankTexture(outputName, textureSize, seed, candidateCount);
+                if (generatePhaseSet)
+                    Dither3DTextureMaker.GenerateBlueNoisePhaseTextures(phasePrefix, textureSize, seed + 1000, phaseCount);
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
     }
 }

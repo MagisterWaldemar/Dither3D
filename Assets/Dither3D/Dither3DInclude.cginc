@@ -8,13 +8,39 @@
 
 sampler3D _DitherTex;
 sampler2D _DitherRampTex;
+sampler2D _BlueNoiseRankTex;
+sampler2D _BlueNoisePhaseTex;
 float4 _DitherTex_TexelSize;
+float4 _BlueNoiseRankTex_TexelSize;
+float4 _BlueNoisePhaseTex_TexelSize;
 float _Scale;
 float _SizeVariability;
 float _Contrast;
 float _StretchSmoothness;
 float _InputExposure;
 float _InputOffset;
+float _DitherPatternSource;
+float _BlueNoisePhaseSpeed;
+float _BlueNoiseHysteresis;
+float _BlueNoiseMinDot;
+
+float2 HashBlueNoiseOffset(float n)
+{
+    float2 sn = sin(float2(n * 12.9898 + 78.233, n * 39.3467 + 11.1351));
+    return frac(sn * 43758.5453);
+}
+
+fixed SampleBlueNoiseRank(float2 uv, float phaseIndex, float phaseTexBlend)
+{
+    float2 phaseOffset = HashBlueNoiseOffset(phaseIndex);
+    float phaseTex = tex2D(_BlueNoisePhaseTex, frac(uv + phaseOffset)).r;
+    phaseOffset = frac(phaseOffset + (phaseTex - 0.5) * phaseTexBlend);
+    return tex2D(_BlueNoiseRankTex, frac(uv + phaseOffset)).r;
+}
+
+static const float MIN_CONTRAST_EPSILON = 0.0001;
+static const float MIN_DOT_CONTRAST_REDUCTION_FACTOR = 0.75;
+static const float MIN_VALID_TEXTURE_SIZE = 1.5;
 
 // dx is the delta in u and v coordinates along the screen X axis.
 // dy is the delta in u and v coordinates along the screen Y axis.
@@ -156,7 +182,7 @@ fixed4 GetDither3D_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy,
     // need to subtract half a texel. We also normalize to the 0-1 range.
     subLayer = (subLayer - 0.5) * invZres;
 
-    // Sample the 3D texture.
+    // Sample the 3D texture (Bayer fractal path).
     fixed pattern = tex3D(_DitherTex, float3(uv, subLayer)).r;
 
     // The dots in the pattern are radial gradients.
@@ -193,7 +219,27 @@ fixed4 GetDither3D_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy,
 
     // Get the pattern value relative to the threshold, scale it
     // according to the contrast, and add the base value.
-    fixed bw = saturate((pattern - threshold) * contrast + baseVal);
+    fixed bwBayer = saturate((pattern - threshold) * contrast + baseVal);
+
+    float blueNoiseBlendFactor = step(0.5, _DitherPatternSource) * step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
+    float2 uvBlue = frac(uv);
+    float phaseTime = max(0.0, _Time.y * _BlueNoisePhaseSpeed);
+    float phaseIdx = floor(phaseTime);
+    float phaseFrac = frac(phaseTime);
+    float stickiness = saturate(_BlueNoiseHysteresis);
+    float phaseBlend = saturate((phaseFrac - stickiness) / max(MIN_CONTRAST_EPSILON, 1.0 - stickiness));
+    float hasPhaseTex = step(MIN_VALID_TEXTURE_SIZE, _BlueNoisePhaseTex_TexelSize.z);
+
+    fixed rankA = SampleBlueNoiseRank(uvBlue, phaseIdx, hasPhaseTex);
+    fixed rankB = SampleBlueNoiseRank(uvBlue, phaseIdx + 1.0, hasPhaseTex);
+    fixed rank = lerp(rankA, rankB, phaseBlend);
+
+    fixed blueThreshold = 1 - brightnessCurve;
+    // Scale contrast down as minimum-dot increases so tiny dots stay present longer.
+    fixed blueContrast = max(MIN_CONTRAST_EPSILON, contrast * (1.0 - saturate(_BlueNoiseMinDot) * MIN_DOT_CONTRAST_REDUCTION_FACTOR));
+    fixed bwBlueNoise = saturate((rank - blueThreshold) * blueContrast + baseVal);
+
+    fixed bw = lerp(bwBayer, bwBlueNoise, blueNoiseBlendFactor);
 
     #if (INVERSE_DOTS)
         bw = 1.0 - bw;
