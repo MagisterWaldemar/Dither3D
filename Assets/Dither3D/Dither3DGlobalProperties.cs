@@ -71,6 +71,30 @@ public class Dither3DGlobalProperties : MonoBehaviour
     public bool scaleWithScreen = true;
     public int referenceRes = 1080;
 
+    [Space]
+
+    [Header("Pointillism Overrides")]
+    [OverrideProperty] public bool pointillismEnable;
+    [HideInInspector] public bool pointillismEnableOverride;
+
+    [OverrideProperty] public float pointillismDirectionality = 0.5f;
+    [HideInInspector] public bool pointillismDirectionalityOverride;
+
+    [OverrideProperty] public float pointillismStrokeLength = 0.4f;
+    [HideInInspector] public bool pointillismStrokeLengthOverride;
+
+    [OverrideProperty] public float pointillismColorSteps = 8f;
+    [HideInInspector] public bool pointillismColorStepsOverride;
+
+    [OverrideProperty] public Color pointillismClampMinColor = Color.black;
+    [HideInInspector] public bool pointillismClampMinColorOverride;
+
+    [OverrideProperty] public Color pointillismClampMaxColor = Color.white;
+    [HideInInspector] public bool pointillismClampMaxColorOverride;
+
+    [OverrideProperty] public float pointillismLUTBlend = 0f;
+    [HideInInspector] public bool pointillismLUTBlendOverride;
+
     void OnEnable()
     {
         CollectMaterials();
@@ -162,6 +186,20 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_BlueNoiseHysteresis", blueNoiseHysteresis, ref changed);
         if (blueNoiseMinDotOverride)
             SetShaderOverride("_BlueNoiseMinDot", blueNoiseMinDot, ref changed);
+        if (pointillismEnableOverride)
+            SetShaderOverride("_PointillismEnable", pointillismEnable ? 1f : 0f, ref changed);
+        if (pointillismDirectionalityOverride)
+            SetShaderOverride("_PointillismDirectionality", pointillismDirectionality, ref changed);
+        if (pointillismStrokeLengthOverride)
+            SetShaderOverride("_PointillismStrokeLength", pointillismStrokeLength, ref changed);
+        if (pointillismColorStepsOverride)
+            SetShaderOverride("_PointillismColorSteps", pointillismColorSteps, ref changed);
+        if (pointillismClampMinColorOverride)
+            SetShaderColorOverride("_PointillismClampMinColor", pointillismClampMinColor, ref changed);
+        if (pointillismClampMaxColorOverride)
+            SetShaderColorOverride("_PointillismClampMaxColor", pointillismClampMaxColor, ref changed);
+        if (pointillismLUTBlendOverride)
+            SetShaderOverride("_PointillismLUTBlend", pointillismLUTBlend, ref changed);
 
         #if UNITY_EDITOR
         if (changed && saveInMaterials)
@@ -192,6 +230,21 @@ public class Dither3DGlobalProperties : MonoBehaviour
             if (mat.GetFloat(property) != value)
             {
                 mat.SetFloat(property, value);
+                changed = true;
+            }
+        }
+    }
+
+    void SetShaderColorOverride(string property, Color value, ref bool changed)
+    {
+        foreach (var mat in ditherMaterials)
+        {
+            if (!mat.HasProperty(property))
+                continue;
+
+            if (mat.GetColor(property) != value)
+            {
+                mat.SetColor(property, value);
                 changed = true;
             }
         }

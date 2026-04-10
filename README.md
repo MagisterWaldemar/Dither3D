@@ -53,6 +53,18 @@ Rate of deterministic temporal phase evolution.
 Stickiness of the current phase before blending to the next.
 - `Blue Noise Min Dot`  
 Minimum-dot equivalent for maintaining small dots during motion.
+- `Enable Pointillism`  
+Enables pointillist post-dither color stylization (default off, backwards compatible).
+- `Stroke Directionality`  
+How strongly channel sampling is offset along an oriented stroke direction.
+- `Stroke Length`  
+Length of directional stroke offsets used in pointillism ranking.
+- `Color Steps`  
+Number of quantized color levels used for color dithering.
+- `Clamp Min Color` / `Clamp Max Color`  
+Per-channel output clamp range before color quantization.
+- `Pointillism LUT (Optional)` / `Pointillism LUT Blend`  
+Optional LUT-driven color skew blended with pointillism output.
 
 **Global Options**
 
@@ -97,6 +109,18 @@ Generated blue-noise textures are imported with:
 - Point filtering
 
 If a blue-noise rank texture is missing, shaders safely fallback to the Bayer path.
+
+## Pointillism setup
+
+1. Keep your existing material workflow unchanged (pointillism is opt-in and off by default).  
+2. (Recommended) Assign a tileable `Blue Noise Rank Texture` and optional phase texture.  
+3. Enable `Pointillism` on the material.  
+4. Tune `Stroke Directionality`, `Stroke Length`, and `Color Steps`.  
+5. Set `Clamp Min/Max Color` to restrict palette range.  
+6. (Optional) Assign `Pointillism LUT` and increase `Pointillism LUT Blend`.  
+7. (Optional) Use **Tools → Dither 3D → Configure Pointillism LUT Import (Selected)** on LUT textures.
+
+Pointillism uses the same deterministic temporal phase/hysteresis controls as blue-noise fractal mode, so conservative/balanced temporal presets also apply to pointillism stability behavior.
 
 ## Files
 
@@ -143,6 +167,17 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 | Hysteresis | 0.80 | Higher = more stickiness, less popping |
 | Min Dot | 0.12 | Higher helps preserve tiny dots in motion |
 
+## Pointillism parameter quick table
+
+| Property | Suggested start (Balanced) | Notes |
+|---|---:|---|
+| Enable Pointillism | On (per material) | Off by default for backward compatibility |
+| Stroke Directionality | 0.5 | Higher increases directional "stroke" feel |
+| Stroke Length | 0.4 | Higher extends channel offsets |
+| Color Steps | 8 | Lower = flatter posterization, higher = smoother |
+| Clamp Min/Max Color | (0,0,0) / (1,1,1) | Narrow for palette-limited looks |
+| LUT Blend | 0.25 | Set 0 if no LUT is assigned |
+
 ## Validation scenarios
 
 Use these when tuning temporal settings:
@@ -153,23 +188,28 @@ Use these when tuning temporal settings:
 4. UV-stretched mesh
 
 Expected result: Bayer mode remains unchanged; BlueNoiseFractal has reduced shimmer/pop when rank texture + conservative/balanced settings are used.
+With pointillism enabled, dot identity remains surface-anchored while color quantization/stroke directionality remains temporally stable under motion.
 
 ## Risk and compatibility
 
 - Existing materials remain backward compatible because `Pattern Source` defaults to Bayer.
 - Existing `_DitherMode`, `_DitherTex`, and `_DitherRampTex` semantics are unchanged.
 - Blue-noise path is opt-in and has runtime fallback to Bayer when rank texture is not available.
+- Pointillism is opt-in (`Enable Pointillism` default = off) and safely degrades when optional LUT is missing (`LUT Blend` default = 0).
 
 ## Known limitations
 
 - BlueNoiseFractal relies on generated rank textures and does not enforce strict mathematical fractal guarantees equivalent to Bayer matrices.
 - Optional phase texture set is generated as separate textures and must be assigned manually.
+- Pointillism directionality currently uses UV derivative orientation; no triplanar/object-space projection path is included yet.
+- Pointillism LUT expects a simple horizontal 1D-style mapping texture and currently applies per-channel remapping only.
 
 ## Next improvements
 
 - Add direct support for phase texture arrays/atlases.
 - Add triplanar/object-space fallback coordinate options for poor UV assets.
 - Add runtime visual debug overlays for phase blend and hysteresis response.
+- Add dedicated pointillism preset asset profiles (palette + directionality + temporal grouping).
 
 ## Discussion of surface-stable trait
 

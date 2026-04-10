@@ -219,6 +219,35 @@ public class Dither3DTextureMaker : MonoBehaviour
         Dither3DBlueNoiseGeneratorWindow.ShowWindow();
     }
 
+    [MenuItem("Tools/Dither 3D/Configure Pointillism LUT Import (Selected)")]
+    static void ConfigureSelectedPointillismLUTImport()
+    {
+        string[] guids = Selection.assetGUIDs;
+        if (guids == null || guids.Length == 0)
+        {
+            EditorUtility.DisplayDialog("Pointillism LUT Import", "Select one or more LUT textures in the Project window.", "OK");
+            return;
+        }
+
+        int changed = 0;
+        foreach (string guid in guids)
+        {
+            string path = AssetDatabase.GUIDToAssetPath(guid);
+            if (string.IsNullOrEmpty(path))
+                continue;
+
+            TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null)
+                continue;
+
+            ConfigurePointillismLUTImport(path);
+            changed++;
+        }
+
+        AssetDatabase.Refresh();
+        EditorUtility.DisplayDialog("Pointillism LUT Import", $"Configured {changed} texture(s).", "OK");
+    }
+
     internal static void GenerateBlueNoiseRankTexture(string outputName, int size, int seed, int candidateCount)
     {
         if (size <= 1)
@@ -367,6 +396,29 @@ public class Dither3DTextureMaker : MonoBehaviour
         importer.mipmapEnabled = false;
         importer.filterMode = FilterMode.Point;
         importer.wrapMode = TextureWrapMode.Repeat;
+        importer.anisoLevel = 0;
+        importer.alphaSource = TextureImporterAlphaSource.None;
+        importer.SaveAndReimport();
+    }
+
+    internal static void ConfigurePointillismLUTImport(string path)
+    {
+        TextureImporter importer = AssetImporter.GetAtPath(path) as TextureImporter;
+        if (importer == null)
+            return;
+
+        TextureImporterPlatformSettings settings = new TextureImporterPlatformSettings
+        {
+            name = "DefaultTexturePlatform",
+            overridden = true,
+            format = TextureImporterFormat.RGBA32
+        };
+        importer.SetPlatformTextureSettings(settings);
+        importer.textureCompression = TextureImporterCompression.Uncompressed;
+        importer.sRGBTexture = false;
+        importer.mipmapEnabled = false;
+        importer.filterMode = FilterMode.Bilinear;
+        importer.wrapMode = TextureWrapMode.Clamp;
         importer.anisoLevel = 0;
         importer.alphaSource = TextureImporterAlphaSource.None;
         importer.SaveAndReimport();
