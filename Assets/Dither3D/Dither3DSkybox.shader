@@ -40,6 +40,19 @@ Shader "Dither 3D/Skybox (6 Sided)"
         _BlueNoisePhaseSpeed ("Blue Noise Phase Speed", Range(0,1)) = 0.15
         _BlueNoiseHysteresis ("Blue Noise Hysteresis", Range(0,1)) = 0.8
         _BlueNoiseMinDot ("Blue Noise Min Dot", Range(0,1)) = 0.12
+        [Space]
+        [Header(Pointillism (Optional))]
+        [Toggle] _PointillismEnable ("Enable Pointillism", Float) = 0
+        _PointillismDirectionality ("Stroke Directionality", Range(0,1)) = 0.5
+        _PointillismStrokeLength ("Stroke Length", Range(0,1)) = 0.4
+        _PointillismColorSteps ("Color Steps", Range(2,32)) = 8
+        [Enum(UV,0,AltUVHook,1,ObjectSpace,2,TriplanarObjectSpace,3)] _PointillismCoordSource ("Pointillism Coord Source", Float) = 1
+        _PointillismObjectScale ("Pointillism Object Scale", Range(0.1,32)) = 1
+        _PointillismTriplanarSharpness ("Pointillism Triplanar Sharpness", Range(1,8)) = 4
+        _PointillismClampMinColor ("Clamp Min Color", Color) = (0,0,0,0)
+        _PointillismClampMaxColor ("Clamp Max Color", Color) = (1,1,1,1)
+        _PointillismLUTTex ("Pointillism LUT (Optional)", 2D) = "white" {}
+        _PointillismLUTBlend ("Pointillism LUT Blend", Range(0,1)) = 0
     }
 
     SubShader

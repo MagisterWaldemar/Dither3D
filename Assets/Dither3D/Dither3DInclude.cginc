@@ -10,9 +10,11 @@ sampler3D _DitherTex;
 sampler2D _DitherRampTex;
 sampler2D _BlueNoiseRankTex;
 sampler2D _BlueNoisePhaseTex;
+sampler2D _PointillismLUTTex;
 float4 _DitherTex_TexelSize;
 float4 _BlueNoiseRankTex_TexelSize;
 float4 _BlueNoisePhaseTex_TexelSize;
+float4 _PointillismLUTTex_TexelSize;
 float _Scale;
 float _SizeVariability;
 float _Contrast;
@@ -23,6 +25,16 @@ float _DitherPatternSource;
 float _BlueNoisePhaseSpeed;
 float _BlueNoiseHysteresis;
 float _BlueNoiseMinDot;
+float _PointillismEnable;
+float _PointillismDirectionality;
+float _PointillismStrokeLength;
+float _PointillismColorSteps;
+float4 _PointillismClampMinColor;
+float4 _PointillismClampMaxColor;
+float _PointillismLUTBlend;
+float _PointillismCoordSource;
+float _PointillismObjectScale;
+float _PointillismTriplanarSharpness;
 
 float2 HashBlueNoiseOffset(float n)
 {
@@ -41,6 +53,154 @@ fixed SampleBlueNoiseRank(float2 uv, float phaseIndex, float phaseTexBlend)
 static const float MIN_CONTRAST_EPSILON = 0.0001;
 static const float MIN_DOT_CONTRAST_REDUCTION_FACTOR = 0.75;
 static const float MIN_VALID_TEXTURE_SIZE = 1.5;
+static const float MIN_POINTILLISM_RANGE = 0.0001;
+static const fixed3 POINTILLISM_SOURCE_VIS_UV = fixed3(0.1, 0.7, 1.0);
+static const fixed3 POINTILLISM_SOURCE_VIS_ALT_UV = fixed3(1.0, 0.85, 0.1);
+static const fixed3 POINTILLISM_SOURCE_VIS_OBJECT = fixed3(1.0, 0.4, 0.1);
+static const float POINTILLISM_DEBUG_BLEND = 0.7;
+
+fixed SampleTemporalRankWithFallback(float2 uvBlue, float phaseOffset)
+{
+    float phaseTime = max(0.0, _Time.y * _BlueNoisePhaseSpeed);
+    float phaseIdx = floor(phaseTime);
+    float phaseFrac = frac(phaseTime);
+    float stickiness = saturate(_BlueNoiseHysteresis);
+    float phaseBlend = saturate((phaseFrac - stickiness) / max(MIN_CONTRAST_EPSILON, 1.0 - stickiness));
+    float hasPhaseTex = step(MIN_VALID_TEXTURE_SIZE, _BlueNoisePhaseTex_TexelSize.z);
+    float hasRankTex = step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
+
+    fixed rankA = SampleBlueNoiseRank(uvBlue, phaseIdx + phaseOffset, hasPhaseTex);
+    fixed rankB = SampleBlueNoiseRank(uvBlue, phaseIdx + 1.0 + phaseOffset, hasPhaseTex);
+    fixed rank = lerp(rankA, rankB, phaseBlend);
+
+    fixed hashRank = frac(sin(dot(uvBlue + phaseOffset, float2(12.9898, 78.233))) * 43758.5453);
+    return lerp(hashRank, rank, hasRankTex);
+}
+
+void SelectLowerMagnitudeDerivativeSet(float2 uvA, float2 uvB, out float2 dx, out float2 dy)
+{
+    // Get the rates of change of two sets of UV coordinates and use the set with lower magnitude.
+    // "Lower magnitude" here means lower squared length (dot(v, v)), not per-component comparison.
+    // This can remove seams caused by discontinuities in the UV coordinates,
+    // as long as the alternative coordinates don't have seams in the same place.
+    // Lower-magnitude derivatives reduce over-aggressive filtering and visual popping near seams.
+    float2 dxA = ddx(uvA);
+    float2 dyA = ddy(uvA);
+    float2 dxB = ddx(uvB);
+    float2 dyB = ddy(uvB);
+    dx = dot(dxA, dxA) < dot(dxB, dxB) ? dxA : dxB;
+    dy = dot(dyA, dyA) < dot(dyB, dyB) ? dyA : dyB;
+}
+
+fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 color)
+{
+    fixed3 clampMin = saturate(_PointillismClampMinColor.rgb);
+    fixed3 clampMax = max(clampMin, saturate(_PointillismClampMaxColor.rgb));
+    fixed3 clampRange = max(fixed3(MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE), clampMax - clampMin);
+    fixed3 clamped = clamp(color, clampMin, clampMax);
+    fixed3 normalized = saturate((clamped - clampMin) / clampRange);
+
+    float steps = max(2.0, _PointillismColorSteps);
+    fixed3 scaled = normalized * (steps - 1.0);
+    fixed3 low = floor(scaled) / (steps - 1.0);
+    fixed3 high = ceil(scaled) / (steps - 1.0);
+    fixed3 fracPart = frac(scaled);
+
+    float2 dominantDerivative = dot(dx, dx) > dot(dy, dy) ? dx : dy;
+    float2 mainDir = dot(dominantDerivative, dominantDerivative) > MIN_CONTRAST_EPSILON ? normalize(dominantDerivative) : float2(1.0, 0.0);
+    float2 orthoDir = float2(-mainDir.y, mainDir.x);
+    // Keep a small base spread so pointillism variation remains visible even with low stroke length.
+    // The remaining spread range is controlled by stroke length for directional stroke tuning.
+    float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
+
+    float2 uvBase = frac(uvPointillism);
+    // Phase offsets are deliberately non-harmonic to decorrelate per-channel rank samples.
+    fixed3 ranks = fixed3(
+        SampleTemporalRankWithFallback(frac(uvBase + orthoDir * spread), 0.0),
+        SampleTemporalRankWithFallback(frac(uvBase - orthoDir * spread), 0.37),
+        SampleTemporalRankWithFallback(frac(uvBase + mainDir * spread * 0.6), 0.73)
+    );
+
+    fixed3 dithered = lerp(low, high, step(ranks, fracPart));
+    fixed3 remapped = saturate(clampMin + dithered * clampRange);
+
+    float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
+    float lutBlend = saturate(_PointillismLUTBlend) * hasLut;
+    fixed3 lutColor = fixed3(
+        tex2D(_PointillismLUTTex, float2(remapped.r, 0.5)).r,
+        tex2D(_PointillismLUTTex, float2(remapped.g, 0.5)).g,
+        tex2D(_PointillismLUTTex, float2(remapped.b, 0.5)).b
+    );
+    return saturate(lerp(remapped, lutColor, lutBlend));
+}
+
+void ResolvePointillismUVAndDebugData(float2 uvDither, float2 uvAlt, float3 worldPos, float3 worldNormal, float hasWorldData, out float2 uvPointillism, out fixed3 sourceVis, out fixed3 triplanarWeights)
+{
+    float source = floor(_PointillismCoordSource + 0.5);
+    sourceVis = POINTILLISM_SOURCE_VIS_UV;
+    triplanarWeights = fixed3(0.0, 0.0, 0.0);
+
+    if (source < 0.5)
+    {
+        uvPointillism = uvDither;
+        return;
+    }
+
+    if (source < 1.5)
+    {
+        sourceVis = POINTILLISM_SOURCE_VIS_ALT_UV;
+        uvPointillism = uvAlt;
+        return;
+    }
+
+    if (hasWorldData < 0.5)
+    {
+        uvPointillism = uvDither;
+        return;
+    }
+
+    float3 objectPos = mul(unity_WorldToObject, float4(worldPos, 1.0)).xyz;
+    float objectScale = max(MIN_CONTRAST_EPSILON, _PointillismObjectScale);
+    objectPos *= objectScale;
+
+    if (source < 2.5)
+    {
+        sourceVis = POINTILLISM_SOURCE_VIS_OBJECT;
+        uvPointillism = objectPos.xz;
+        return;
+    }
+
+    float3 objectNormal = mul((float3x3)unity_WorldToObject, worldNormal);
+    float normalLen = length(objectNormal);
+    if (normalLen <= MIN_CONTRAST_EPSILON)
+    {
+        sourceVis = POINTILLISM_SOURCE_VIS_OBJECT;
+        uvPointillism = objectPos.xz;
+        return;
+    }
+
+    float3 normalAbs = abs(objectNormal / normalLen);
+    float sharpness = max(1.0, _PointillismTriplanarSharpness);
+    float3 weights = pow(normalAbs, sharpness);
+    float weightSum = weights.x + weights.y + weights.z;
+    weights /= max(MIN_CONTRAST_EPSILON, weightSum);
+    triplanarWeights = weights;
+    sourceVis = weights;
+
+    float2 uvX = objectPos.yz;
+    float2 uvY = objectPos.xz;
+    float2 uvZ = objectPos.xy;
+    uvPointillism = uvX * weights.x + uvY * weights.y + uvZ * weights.z;
+}
+
+float2 ResolvePointillismUV(float2 uvDither, float2 uvAlt, float3 worldPos, float3 worldNormal, float hasWorldData)
+{
+    float2 uvPointillism;
+    fixed3 sourceVis;
+    fixed3 triplanarWeights;
+    ResolvePointillismUVAndDebugData(uvDither, uvAlt, worldPos, worldNormal, hasWorldData, uvPointillism, sourceVis, triplanarWeights);
+    return uvPointillism;
+}
 
 // dx is the delta in u and v coordinates along the screen X axis.
 // dy is the delta in u and v coordinates along the screen Y axis.
@@ -223,16 +383,7 @@ fixed4 GetDither3D_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy,
 
     float blueNoiseBlendFactor = step(0.5, _DitherPatternSource) * step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
     float2 uvBlue = frac(uv);
-    float phaseTime = max(0.0, _Time.y * _BlueNoisePhaseSpeed);
-    float phaseIdx = floor(phaseTime);
-    float phaseFrac = frac(phaseTime);
-    float stickiness = saturate(_BlueNoiseHysteresis);
-    float phaseBlend = saturate((phaseFrac - stickiness) / max(MIN_CONTRAST_EPSILON, 1.0 - stickiness));
-    float hasPhaseTex = step(MIN_VALID_TEXTURE_SIZE, _BlueNoisePhaseTex_TexelSize.z);
-
-    fixed rankA = SampleBlueNoiseRank(uvBlue, phaseIdx, hasPhaseTex);
-    fixed rankB = SampleBlueNoiseRank(uvBlue, phaseIdx + 1.0, hasPhaseTex);
-    fixed rank = lerp(rankA, rankB, phaseBlend);
+    fixed rank = SampleTemporalRankWithFallback(uvBlue, 0.0);
 
     fixed blueThreshold = 1 - brightnessCurve;
     // Scale contrast down as minimum-dot increases so tiny dots stay present longer.
@@ -258,15 +409,9 @@ fixed GetDither3D(float2 uv_DitherTex, float4 screenPos, fixed brightness)
 
 fixed GetDither3DAltUV(float2 uv_DitherTex, float2 uv_DitherTexAlt, float4 screenPos, fixed brightness)
 {
-    // Get the rates of change of two sets of UV coordinates and use the smaller ones.
-    // This can remove seams caused by discontinuities in the UV coordinates,
-    // as long as the alternative coordinates don't have seams in the same place.
-    float2 dxA = ddx(uv_DitherTex);
-    float2 dyA = ddy(uv_DitherTex);
-    float2 dxB = ddx(uv_DitherTexAlt);
-    float2 dyB = ddy(uv_DitherTexAlt);
-    float2 dx = dot(dxA, dxA) < dot(dxB, dxB) ? dxA : dxB;
-    float2 dy = dot(dyA, dyA) < dot(dyB, dyB) ? dyA : dyB;
+    float2 dx;
+    float2 dy;
+    SelectLowerMagnitudeDerivativeSet(uv_DitherTex, uv_DitherTexAlt, dx, dy);
     return GetDither3D_(uv_DitherTex, screenPos, dx, dy, brightness);
 }
 
@@ -310,7 +455,7 @@ float2 RotateUV(float2 uv, float2 xUnitDir)
     return uv.x * xUnitDir + uv.y * float2(-xUnitDir.y, xUnitDir.x);
 }
 
-fixed4 GetDither3DColor_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy, fixed4 color)
+fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 screenPos, float2 dx, float2 dy, fixed4 color, fixed3 pointillismSourceVis, fixed3 pointillismTriplanarWeights)
 {
     // Adjust brightness according to shader exposure and offset properties.
     color.rgb = saturate(color.rgb * _InputExposure + _InputOffset);
@@ -336,7 +481,30 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float4 screenPos, float2 dx, float
         color.rgb = CMYKtoRGB(cmyk);
     #endif
 
+    if (_PointillismEnable > 0.5)
+    {
+        color.rgb = ApplyPointillismColor(uvPointillism, dx, dy, color.rgb);
+
+        #if (DEBUG_FRACTAL)
+            float hasTriplanarWeights = step(MIN_CONTRAST_EPSILON, pointillismTriplanarWeights.x + pointillismTriplanarWeights.y + pointillismTriplanarWeights.z);
+            fixed3 pointillismVis = lerp(pointillismSourceVis, pointillismTriplanarWeights, hasTriplanarWeights);
+            color.rgb = lerp(color.rgb, pointillismVis, POINTILLISM_DEBUG_BLEND);
+        #endif
+    }
+
     return color;
+}
+
+fixed4 GetDither3DColorWorld(float2 uv_DitherTex, float2 uv_DitherTexAlt, float3 worldPos, float3 worldNormal, float4 screenPos, fixed4 color)
+{
+    float2 dx;
+    float2 dy;
+    SelectLowerMagnitudeDerivativeSet(uv_DitherTex, uv_DitherTexAlt, dx, dy);
+    float2 uvPointillism;
+    fixed3 pointillismSourceVis;
+    fixed3 pointillismTriplanarWeights;
+    ResolvePointillismUVAndDebugData(uv_DitherTex, uv_DitherTexAlt, worldPos, worldNormal, 1.0, uvPointillism, pointillismSourceVis, pointillismTriplanarWeights);
+    return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
 }
 
 fixed4 GetDither3DColor(float2 uv_DitherTex, float4 screenPos, fixed4 color)
@@ -344,19 +512,21 @@ fixed4 GetDither3DColor(float2 uv_DitherTex, float4 screenPos, fixed4 color)
     // Get the rates of change of the UV coordinates.
     float2 dx = ddx(uv_DitherTex);
     float2 dy = ddy(uv_DitherTex);
-    return GetDither3DColor_(uv_DitherTex, screenPos, dx, dy, color);
+    float2 uvPointillism;
+    fixed3 pointillismSourceVis;
+    fixed3 pointillismTriplanarWeights;
+    ResolvePointillismUVAndDebugData(uv_DitherTex, uv_DitherTex, float3(0, 0, 0), float3(0, 1, 0), 0.0, uvPointillism, pointillismSourceVis, pointillismTriplanarWeights);
+    return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
 }
 
 fixed4 GetDither3DColorAltUV(float2 uv_DitherTex, float2 uv_DitherTexAlt, float4 screenPos, fixed4 color)
 {
-    // Get the rates of change of two sets of UV coordinates and use the smaller ones.
-    // This can remove seams caused by discontinuities in the UV coordinates,
-    // as long as the alternative coordinates don't have seams in the same place.
-    float2 dxA = ddx(uv_DitherTex);
-    float2 dyA = ddy(uv_DitherTex);
-    float2 dxB = ddx(uv_DitherTexAlt);
-    float2 dyB = ddy(uv_DitherTexAlt);
-    float2 dx = dot(dxA, dxA) < dot(dxB, dxB) ? dxA : dxB;
-    float2 dy = dot(dyA, dyA) < dot(dyB, dyB) ? dyA : dyB;
-    return GetDither3DColor_(uv_DitherTex, screenPos, dx, dy, color);
+    float2 dx;
+    float2 dy;
+    SelectLowerMagnitudeDerivativeSet(uv_DitherTex, uv_DitherTexAlt, dx, dy);
+    float2 uvPointillism;
+    fixed3 pointillismSourceVis;
+    fixed3 pointillismTriplanarWeights;
+    ResolvePointillismUVAndDebugData(uv_DitherTex, uv_DitherTexAlt, float3(0, 0, 0), float3(0, 1, 0), 0.0, uvPointillism, pointillismSourceVis, pointillismTriplanarWeights);
+    return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
 }

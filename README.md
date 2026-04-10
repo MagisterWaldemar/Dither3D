@@ -53,6 +53,24 @@ Rate of deterministic temporal phase evolution.
 Stickiness of the current phase before blending to the next.
 - `Blue Noise Min Dot`  
 Minimum-dot equivalent for maintaining small dots during motion.
+- `Enable Pointillism`
+Enables pointillist post-dither color stylization (default off, backwards compatible).
+- `Stroke Directionality`
+How strongly channel sampling is offset along an oriented stroke direction.
+- `Stroke Length`
+Length of directional stroke offsets used in pointillism ranking.
+- `Color Steps`
+Number of quantized color levels used for color dithering.
+- `Pointillism Object Scale`
+Scale multiplier for object-space/triplanar pointillism coordinates.
+- `Pointillism Triplanar Sharpness`
+Blend sharpness for triplanar object-space coordinate mixing.
+- `Pointillism Coord Source`
+`UV` by default, with optional `AltUVHook`, `ObjectSpace`, and `TriplanarObjectSpace`.
+- `Clamp Min Color` / `Clamp Max Color`
+Per-channel output clamp range before color quantization.
+- `Pointillism LUT (Optional)` / `Pointillism LUT Blend`
+Optional LUT-driven color skew blended with pointillism output.
 
 **Global Options**
 
@@ -67,7 +85,9 @@ When using a perspective camera, dots must be larger towards the edge of the scr
 - `Quantize Layers`  
 When disabled, dots may grow or shrink in size when they appear or disappear, respectively. Even when enabled, dots may still be partially cut off, but that's a separate and unavoidable effect.
 - `Debug Fractal`  
-Displays an overlay effect showing the pattern size, when enabled.
+Displays debug overlays when enabled.  
+In grayscale mode, this shows fractal debug channels (U, V, and layer index) over the dither output.  
+When pointillism is enabled, it additionally shows coordinate-source debugging (UV/AltUV/ObjectSpace source colors, or triplanar XYZ blend weights as RGB).
 
 `Dither3DGlobalProperties` now also includes a temporal preset override for blue-noise mode:
 
@@ -79,6 +99,15 @@ Middle-ground speed and stickiness.
 Faster phase evolution and reduced stickiness (better for close/static shots).
 
 The `Dither3DGlobalProperties` component can also be used to override the non-global properties of all dither materials at once.
+
+`Dither3DGlobalProperties` also provides a dedicated pointillism preset override that groups stroke + palette + temporal tuning:
+
+- `Conservative`
+Lower stroke directionality/length, reduced color steps, slightly clamped palette, and high temporal stickiness.
+- `Balanced` (default)
+Middle-ground values across stroke, palette, and temporal controls.
+- `Aggressive`
+Higher stroke directionality/length, more color steps, and faster/lower-stickiness temporal response.
 
 ## BlueNoiseFractal setup
 
@@ -97,6 +126,29 @@ Generated blue-noise textures are imported with:
 - Point filtering
 
 If a blue-noise rank texture is missing, shaders safely fallback to the Bayer path.
+
+## Pointillism setup
+
+1. Keep your existing material workflow unchanged (pointillism is opt-in and off by default).
+2. (Recommended) Assign a tileable `Blue Noise Rank Texture` and optional phase texture.
+3. Enable `Pointillism` on the material.
+4. Tune `Stroke Directionality`, `Stroke Length`, and `Color Steps`.
+5. Choose `Pointillism Coord Source`:
+   - `UV`: standard UV-anchored mode.
+   - `AltUVHook`: alternate UVs from `GetDither3DColorAltUV(...)`.
+   - `ObjectSpace`: uses object-space XZ projection.
+   - `TriplanarObjectSpace`: object-space triplanar blend for stretched/poor UVs.
+6. Set `Clamp Min/Max Color` to restrict palette range.
+7. (Optional) Assign `Pointillism LUT` and increase `Pointillism LUT Blend`.
+8. (Optional) Use **Tools → Dither 3D → Configure Pointillism LUT Import (Selected)** on LUT textures.
+9. For coordinate tuning, enable global `Debug Fractal`:
+   - UV source: light blue (0.1, 0.7, 1.0)
+   - AltUVHook source: golden yellow (1.0, 0.85, 0.1)
+   - ObjectSpace source: orange (1.0, 0.4, 0.1)
+   - TriplanarObjectSpace source: RGB = X/Y/Z blend weights
+
+Pointillism uses the same deterministic temporal phase/hysteresis controls as blue-noise fractal mode, so conservative/balanced temporal presets also apply to pointillism stability behavior.
+You can also use the dedicated pointillism preset override in `Dither3DGlobalProperties` to set stroke/palette/temporal as one grouped choice.
 
 ## Files
 
@@ -143,6 +195,28 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 | Hysteresis | 0.80 | Higher = more stickiness, less popping |
 | Min Dot | 0.12 | Higher helps preserve tiny dots in motion |
 
+## Pointillism parameter quick table
+
+| Property | Suggested start (Balanced) | Notes |
+|---|---:|---|
+| Enable Pointillism | On (per material) | Off by default for backward compatibility |
+| Stroke Directionality | 0.5 | Higher increases directional "stroke" feel |
+| Stroke Length | 0.4 | Higher extends channel offsets |
+| Color Steps | 8 | Lower = flatter posterization, higher = smoother |
+| Pointillism Coord Source | UV | UV / AltUVHook / ObjectSpace / TriplanarObjectSpace |
+| Object Scale | 1.0 | Scales object-space coordinate density |
+| Triplanar Sharpness | 4.0 | Higher = harder blend transitions between planes |
+| Clamp Min/Max Color | (0,0,0) / (1,1,1) | Narrow for palette-limited looks |
+| LUT Blend | 0.25 | Set 0 if no LUT is assigned |
+
+## Pointillism grouped preset quick table
+
+| Preset | Stroke Directionality | Stroke Length | Color Steps | Clamp Range | Phase Speed / Hysteresis / Min Dot |
+|---|---:|---:|---:|---|---|
+| Conservative | 0.35 | 0.25 | 6 | (0.05..0.95) | 0.08 / 0.90 / 0.18 |
+| Balanced | 0.50 | 0.40 | 8 | (0..1) | 0.15 / 0.80 / 0.12 |
+| Aggressive | 0.80 | 0.70 | 12 | (0..1) | 0.45 / 0.45 / 0.04 |
+
 ## Validation scenarios
 
 Use these when tuning temporal settings:
@@ -153,23 +227,26 @@ Use these when tuning temporal settings:
 4. UV-stretched mesh
 
 Expected result: Bayer mode remains unchanged; BlueNoiseFractal has reduced shimmer/pop when rank texture + conservative/balanced settings are used.
+With pointillism enabled, dot identity remains surface-anchored while color quantization/stroke directionality remains temporally stable under motion.
 
 ## Risk and compatibility
 
 - Existing materials remain backward compatible because `Pattern Source` defaults to Bayer.
 - Existing `_DitherMode`, `_DitherTex`, and `_DitherRampTex` semantics are unchanged.
 - Blue-noise path is opt-in and has runtime fallback to Bayer when rank texture is not available.
+- Pointillism is opt-in (`Enable Pointillism` default = off) and safely degrades when optional LUT is missing (`LUT Blend` default = 0).
 
 ## Known limitations
 
 - BlueNoiseFractal relies on generated rank textures and does not enforce strict mathematical fractal guarantees equivalent to Bayer matrices.
 - Optional phase texture set is generated as separate textures and must be assigned manually.
+- Object/triplanar pointillism coordinates are currently available on opaque/cutout surface shaders; other shader paths may still rely on UV/AltUV behavior.
+- Pointillism LUT expects a simple horizontal 1D-style mapping texture and currently applies per-channel remapping only.
 
 ## Next improvements
 
 - Add direct support for phase texture arrays/atlases.
-- Add triplanar/object-space fallback coordinate options for poor UV assets.
-- Add runtime visual debug overlays for phase blend and hysteresis response.
+- Extend runtime visual debug overlays to include phase blend and hysteresis response.
 
 ## Discussion of surface-stable trait
 
