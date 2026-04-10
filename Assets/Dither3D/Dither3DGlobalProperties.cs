@@ -17,6 +17,7 @@ public class Dither3DGlobalProperties : MonoBehaviour
     static List<Material> ditherMaterials = new List<Material>();
 
     public enum DitherColorMode { Grayscale, RGB, CMYK }
+    public enum DitherTemporalPreset { Conservative, Balanced, Aggressive }
 
     [Header("Global Options")]
     public DitherColorMode colorMode;
@@ -51,6 +52,20 @@ public class Dither3DGlobalProperties : MonoBehaviour
     
     [OverrideProperty] public float stretchSmoothness = 1;
     [HideInInspector] public bool stretchSmoothnessOverride;
+
+    [Space]
+
+    [OverrideProperty] public DitherTemporalPreset temporalPreset = DitherTemporalPreset.Balanced;
+    [HideInInspector] public bool temporalPresetOverride;
+
+    [OverrideProperty] public float blueNoisePhaseSpeed = 0.15f;
+    [HideInInspector] public bool blueNoisePhaseSpeedOverride;
+
+    [OverrideProperty] public float blueNoiseHysteresis = 0.8f;
+    [HideInInspector] public bool blueNoiseHysteresisOverride;
+
+    [OverrideProperty] public float blueNoiseMinDot = 0.12f;
+    [HideInInspector] public bool blueNoiseMinDotOverride;
 
     [Header("Dots Scaling Behavior")]
     public bool scaleWithScreen = true;
@@ -134,6 +149,19 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_Contrast", dotContrast, ref changed);
         if (stretchSmoothnessOverride)
             SetShaderOverride("_StretchSmoothness", stretchSmoothness, ref changed);
+        if (temporalPresetOverride)
+        {
+            GetTemporalPresetValues(temporalPreset, out float presetPhaseSpeed, out float presetHysteresis, out float presetMinDot);
+            SetShaderOverride("_BlueNoisePhaseSpeed", presetPhaseSpeed, ref changed);
+            SetShaderOverride("_BlueNoiseHysteresis", presetHysteresis, ref changed);
+            SetShaderOverride("_BlueNoiseMinDot", presetMinDot, ref changed);
+        }
+        if (blueNoisePhaseSpeedOverride)
+            SetShaderOverride("_BlueNoisePhaseSpeed", blueNoisePhaseSpeed, ref changed);
+        if (blueNoiseHysteresisOverride)
+            SetShaderOverride("_BlueNoiseHysteresis", blueNoiseHysteresis, ref changed);
+        if (blueNoiseMinDotOverride)
+            SetShaderOverride("_BlueNoiseMinDot", blueNoiseMinDot, ref changed);
 
         #if UNITY_EDITOR
         if (changed && saveInMaterials)
@@ -158,11 +186,36 @@ public class Dither3DGlobalProperties : MonoBehaviour
     {
         foreach (var mat in ditherMaterials)
         {
+            if (!mat.HasProperty(property))
+                continue;
+
             if (mat.GetFloat(property) != value)
             {
                 mat.SetFloat(property, value);
                 changed = true;
             }
+        }
+    }
+
+    static void GetTemporalPresetValues(DitherTemporalPreset preset, out float phaseSpeed, out float hysteresis, out float minDot)
+    {
+        switch (preset)
+        {
+            case DitherTemporalPreset.Conservative:
+                phaseSpeed = 0.08f;
+                hysteresis = 0.90f;
+                minDot = 0.18f;
+                break;
+            case DitherTemporalPreset.Aggressive:
+                phaseSpeed = 0.45f;
+                hysteresis = 0.45f;
+                minDot = 0.04f;
+                break;
+            default:
+                phaseSpeed = 0.15f;
+                hysteresis = 0.80f;
+                minDot = 0.12f;
+                break;
         }
     }
 }

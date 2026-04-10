@@ -34,6 +34,8 @@ Offset to apply to input brightness (default 0).
 
 - `Dot Scale`  
 Value that exponentially scales the dots.
+- `Pattern Source`  
+`Bayer` (default, previous behavior) or `BlueNoiseFractal` (optional).
 - `Dot Size Variability`  
 0 = shading controls dot count "Bayer style" (default);  
 1 = shading controls dot sizes "half-tone style".
@@ -41,6 +43,16 @@ Value that exponentially scales the dots.
 A value of 1 produces perfect anti-aliasing (default 1).
 - `Stretch Smoothness`  
 How much to smooth anisotropic dots (default 1).
+- `Blue Noise Rank Texture`  
+Optional tileable rank texture (0..1) used by `BlueNoiseFractal`.
+- `Blue Noise Phase Texture (Optional)`  
+Optional texture for extra temporal phase decorrelation.
+- `Blue Noise Phase Speed`  
+Rate of deterministic temporal phase evolution.
+- `Blue Noise Hysteresis`  
+Stickiness of the current phase before blending to the next.
+- `Blue Noise Min Dot`  
+Minimum-dot equivalent for maintaining small dots during motion.
 
 **Global Options**
 
@@ -57,7 +69,34 @@ When disabled, dots may grow or shrink in size when they appear or disappear, re
 - `Debug Fractal`  
 Displays an overlay effect showing the pattern size, when enabled.
 
+`Dither3DGlobalProperties` now also includes a temporal preset override for blue-noise mode:
+
+- `Conservative`  
+Slow phase evolution and high stickiness (best temporal stability for heavy motion/upscalers).
+- `Balanced` (default)  
+Middle-ground speed and stickiness.
+- `Aggressive`  
+Faster phase evolution and reduced stickiness (better for close/static shots).
+
 The `Dither3DGlobalProperties` component can also be used to override the non-global properties of all dither materials at once.
+
+## BlueNoiseFractal setup
+
+1. Keep existing Bayer workflow as-is (default behavior).  
+2. Generate blue-noise textures via **Tools → Dither 3D → Blue Noise Fractal Generator**.  
+3. Assign `Blue Noise Rank Texture` to the material.  
+4. (Optional) Generate and assign a `Blue Noise Phase Texture`.  
+5. Switch `Pattern Source` to `BlueNoiseFractal`.  
+6. Tune `Phase Speed`, `Hysteresis`, `Min Dot`, or use global temporal preset overrides.
+
+Generated blue-noise textures are imported with:
+- Linear (sRGB off)
+- No mipmaps
+- Uncompressed
+- Repeat wrap
+- Point filtering
+
+If a blue-noise rank texture is missing, shaders safely fallback to the Bayer path.
 
 ## Files
 
@@ -91,6 +130,46 @@ The script also generates PNG image files, where the different layers are laid o
 - `Dither3D_2x2.png`
 - `Dither3D_4x4.png`
 - `Dither3D_8x8.png`
+
+Additional editor tooling for optional blue-noise rank/phase textures:
+
+- `Tools/Dither 3D/Blue Noise Fractal Generator`
+
+## BlueNoiseFractal parameter quick table
+
+| Property | Suggested start (Balanced) | Notes |
+|---|---:|---|
+| Phase Speed | 0.15 | Lower for more temporal stability |
+| Hysteresis | 0.80 | Higher = more stickiness, less popping |
+| Min Dot | 0.12 | Higher helps preserve tiny dots in motion |
+
+## Validation scenarios
+
+Use these when tuning temporal settings:
+
+1. Static object + whipping camera
+2. Moving/rotating object + static camera
+3. Thin geometry / high-frequency albedo
+4. UV-stretched mesh
+
+Expected result: Bayer mode remains unchanged; BlueNoiseFractal has reduced shimmer/pop when rank texture + conservative/balanced settings are used.
+
+## Risk and compatibility
+
+- Existing materials remain backward compatible because `Pattern Source` defaults to Bayer.
+- Existing `_DitherMode`, `_DitherTex`, and `_DitherRampTex` semantics are unchanged.
+- Blue-noise path is opt-in and has runtime fallback to Bayer when rank texture is not available.
+
+## Known limitations
+
+- BlueNoiseFractal relies on generated rank textures and does not enforce strict mathematical fractal guarantees equivalent to Bayer matrices.
+- Optional phase texture set is generated as separate textures and must be assigned manually.
+
+## Next improvements
+
+- Add direct support for phase texture arrays/atlases.
+- Add triplanar/object-space fallback coordinate options for poor UV assets.
+- Add runtime visual debug overlays for phase blend and hysteresis response.
 
 ## Discussion of surface-stable trait
 
