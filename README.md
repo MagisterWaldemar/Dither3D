@@ -85,7 +85,9 @@ When using a perspective camera, dots must be larger towards the edge of the scr
 - `Quantize Layers`  
 When disabled, dots may grow or shrink in size when they appear or disappear, respectively. Even when enabled, dots may still be partially cut off, but that's a separate and unavoidable effect.
 - `Debug Fractal`  
-Displays an overlay effect showing the pattern size, when enabled.
+Displays debug overlays when enabled.  
+In grayscale mode, this shows fractal debug channels (U, V, and layer index) over the dither output.  
+When pointillism is enabled, it additionally shows coordinate-source debugging (UV/AltUV/ObjectSpace source colors, or triplanar XYZ blend weights as RGB).
 
 `Dither3DGlobalProperties` now also includes a temporal preset override for blue-noise mode:
 
@@ -139,6 +141,11 @@ If a blue-noise rank texture is missing, shaders safely fallback to the Bayer pa
 6. Set `Clamp Min/Max Color` to restrict palette range.
 7. (Optional) Assign `Pointillism LUT` and increase `Pointillism LUT Blend`.
 8. (Optional) Use **Tools → Dither 3D → Configure Pointillism LUT Import (Selected)** on LUT textures.
+9. For coordinate tuning, enable global `Debug Fractal`:
+   - UV source: light blue (0.1, 0.7, 1.0)
+   - AltUVHook source: golden yellow (1.0, 0.85, 0.1)
+   - ObjectSpace source: orange (1.0, 0.4, 0.1)
+   - TriplanarObjectSpace source: RGB = X/Y/Z blend weights
 
 Pointillism uses the same deterministic temporal phase/hysteresis controls as blue-noise fractal mode, so conservative/balanced temporal presets also apply to pointillism stability behavior.
 You can also use the dedicated pointillism preset override in `Dither3DGlobalProperties` to set stroke/palette/temporal as one grouped choice.
@@ -239,7 +246,7 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 ## Next improvements
 
 - Add direct support for phase texture arrays/atlases.
-- Add runtime visual debug overlays for phase blend and hysteresis response.
+- Extend runtime visual debug overlays to include phase blend and hysteresis response.
 
 ## Discussion of surface-stable trait
 
