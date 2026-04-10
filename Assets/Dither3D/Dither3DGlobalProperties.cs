@@ -86,6 +86,9 @@ public class Dither3DGlobalProperties : MonoBehaviour
     [OverrideProperty] public float pointillismColorSteps = 8f;
     [HideInInspector] public bool pointillismColorStepsOverride;
 
+    [OverrideProperty] public float pointillismCoordSource;
+    [HideInInspector] public bool pointillismCoordSourceOverride;
+
     [OverrideProperty] public Color pointillismClampMinColor = Color.black;
     [HideInInspector] public bool pointillismClampMinColorOverride;
 
@@ -194,6 +197,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_PointillismStrokeLength", pointillismStrokeLength, ref changed);
         if (pointillismColorStepsOverride)
             SetShaderOverride("_PointillismColorSteps", pointillismColorSteps, ref changed);
+        if (pointillismCoordSourceOverride)
+            SetShaderOverride("_PointillismCoordSource", pointillismCoordSource, ref changed);
         if (pointillismClampMinColorOverride)
             SetShaderColorOverride("_PointillismClampMinColor", pointillismClampMinColor, ref changed);
         if (pointillismClampMaxColorOverride)

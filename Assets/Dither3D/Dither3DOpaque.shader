@@ -44,6 +44,7 @@ Shader "Dither 3D/Opaque"
         _PointillismDirectionality ("Stroke Directionality", Range(0,1)) = 0.5
         _PointillismStrokeLength ("Stroke Length", Range(0,1)) = 0.4
         _PointillismColorSteps ("Color Steps", Range(2,32)) = 8
+        [Enum(UV,0,AltUVHook,1)] _PointillismCoordSource ("Pointillism Coord Source", Float) = 0
         _PointillismClampMinColor ("Clamp Min Color", Color) = (0,0,0,0)
         _PointillismClampMaxColor ("Clamp Max Color", Color) = (1,1,1,1)
         _PointillismLUTTex ("Pointillism LUT (Optional)", 2D) = "white" {}

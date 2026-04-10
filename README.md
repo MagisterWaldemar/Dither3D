@@ -53,17 +53,19 @@ Rate of deterministic temporal phase evolution.
 Stickiness of the current phase before blending to the next.
 - `Blue Noise Min Dot`  
 Minimum-dot equivalent for maintaining small dots during motion.
-- `Enable Pointillism`  
+- `Enable Pointillism`
 Enables pointillist post-dither color stylization (default off, backwards compatible).
-- `Stroke Directionality`  
+- `Stroke Directionality`
 How strongly channel sampling is offset along an oriented stroke direction.
-- `Stroke Length`  
+- `Stroke Length`
 Length of directional stroke offsets used in pointillism ranking.
-- `Color Steps`  
+- `Color Steps`
 Number of quantized color levels used for color dithering.
-- `Clamp Min Color` / `Clamp Max Color`  
+- `Pointillism Coord Source`
+`UV` by default, with `AltUVHook` available for shaders that pass a second coordinate set via `GetDither3DColorAltUV(...)`.
+- `Clamp Min Color` / `Clamp Max Color`
 Per-channel output clamp range before color quantization.
-- `Pointillism LUT (Optional)` / `Pointillism LUT Blend`  
+- `Pointillism LUT (Optional)` / `Pointillism LUT Blend`
 Optional LUT-driven color skew blended with pointillism output.
 
 **Global Options**
@@ -112,13 +114,14 @@ If a blue-noise rank texture is missing, shaders safely fallback to the Bayer pa
 
 ## Pointillism setup
 
-1. Keep your existing material workflow unchanged (pointillism is opt-in and off by default).  
-2. (Recommended) Assign a tileable `Blue Noise Rank Texture` and optional phase texture.  
-3. Enable `Pointillism` on the material.  
-4. Tune `Stroke Directionality`, `Stroke Length`, and `Color Steps`.  
-5. Set `Clamp Min/Max Color` to restrict palette range.  
-6. (Optional) Assign `Pointillism LUT` and increase `Pointillism LUT Blend`.  
-7. (Optional) Use **Tools → Dither 3D → Configure Pointillism LUT Import (Selected)** on LUT textures.
+1. Keep your existing material workflow unchanged (pointillism is opt-in and off by default).
+2. (Recommended) Assign a tileable `Blue Noise Rank Texture` and optional phase texture.
+3. Enable `Pointillism` on the material.
+4. Tune `Stroke Directionality`, `Stroke Length`, and `Color Steps`.
+5. Choose `Pointillism Coord Source` (`UV` or `AltUVHook` when your shader provides fallback coordinates).
+6. Set `Clamp Min/Max Color` to restrict palette range.
+7. (Optional) Assign `Pointillism LUT` and increase `Pointillism LUT Blend`.
+8. (Optional) Use **Tools → Dither 3D → Configure Pointillism LUT Import (Selected)** on LUT textures.
 
 Pointillism uses the same deterministic temporal phase/hysteresis controls as blue-noise fractal mode, so conservative/balanced temporal presets also apply to pointillism stability behavior.
 
@@ -175,6 +178,7 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 | Stroke Directionality | 0.5 | Higher increases directional "stroke" feel |
 | Stroke Length | 0.4 | Higher extends channel offsets |
 | Color Steps | 8 | Lower = flatter posterization, higher = smoother |
+| Pointillism Coord Source | UV | Use AltUVHook when custom shader passes alternate coords |
 | Clamp Min/Max Color | (0,0,0) / (1,1,1) | Narrow for palette-limited looks |
 | LUT Blend | 0.25 | Set 0 if no LUT is assigned |
 
@@ -201,7 +205,7 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 
 - BlueNoiseFractal relies on generated rank textures and does not enforce strict mathematical fractal guarantees equivalent to Bayer matrices.
 - Optional phase texture set is generated as separate textures and must be assigned manually.
-- Pointillism directionality currently uses UV derivative orientation; no triplanar/object-space projection path is included yet.
+- Pointillism supports a UV path plus an AltUV hook path, but does not yet include built-in triplanar/object-space projection.
 - Pointillism LUT expects a simple horizontal 1D-style mapping texture and currently applies per-channel remapping only.
 
 ## Next improvements
