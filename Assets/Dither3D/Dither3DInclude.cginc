@@ -85,8 +85,8 @@ fixed3 ApplyPointillismColor(float2 uv_Pointillism, float2 dx, float2 dy, fixed3
     fixed3 high = ceil(scaled) / (steps - 1.0);
     fixed3 fracPart = frac(scaled);
 
-    float2 mainDir = dot(dx, dx) > dot(dy, dy) ? dx : dy;
-    mainDir = dot(mainDir, mainDir) > MIN_CONTRAST_EPSILON ? normalize(mainDir) : float2(1.0, 0.0);
+    float2 selectedDir = dot(dx, dx) > dot(dy, dy) ? dx : dy;
+    float2 mainDir = dot(selectedDir, selectedDir) > MIN_CONTRAST_EPSILON ? normalize(selectedDir) : float2(1.0, 0.0);
     float2 orthoDir = float2(-mainDir.y, mainDir.x);
     float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
 
@@ -422,7 +422,7 @@ fixed4 GetDither3DColorAltUV(float2 uv_DitherTex, float2 uv_DitherTexAlt, float4
     float2 dyB = ddy(uv_DitherTexAlt);
     float2 dx = dot(dxA, dxA) < dot(dxB, dxB) ? dxA : dxB;
     float2 dy = dot(dyA, dyA) < dot(dyB, dyB) ? dyA : dyB;
-    float useAltUvForPointillism = step(0.5, _PointillismCoordSource);
-    float2 uvPointillism = lerp(uv_DitherTex, uv_DitherTexAlt, useAltUvForPointillism);
+    float useAltUVForPointillism = step(0.5, _PointillismCoordSource);
+    float2 uvPointillism = lerp(uv_DitherTex, uv_DitherTexAlt, useAltUVForPointillism);
     return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color);
 }
