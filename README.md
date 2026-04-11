@@ -160,7 +160,11 @@ How strongly channel sampling is offset along an oriented stroke direction.
 - `Stroke Length`
 Length of directional stroke offsets used in pointillism ranking.
 - `Color Steps`
-Number of quantized color levels used for color dithering.
+Number of quantized lightness levels used for pointillism color assignment.
+- `Pointillism Color Model`
+`Legacy` preserves the previous luminance/HSL behavior. `OKLab` uses perceptual lightness quantization with chroma preservation (recommended).
+- `Pointillism Max Chroma (OKLab)`
+Maximum allowed OKLab chroma before conversion back to RGB, used to reduce clipping/artifacts in highly saturated regions.
 - `Pointillism Object Scale`
 Scale multiplier for object-space/triplanar pointillism coordinates.
 - `Pointillism Triplanar Sharpness`
@@ -307,7 +311,9 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 | Stroke Directionality | 0.5 | Higher increases directional "stroke" feel |
 | Stroke Length | 0.4 | Higher extends channel offsets |
 | Blue Noise Stroke Mix | 0.3 | Blend between geometric surface direction and blue-noise-derived direction for stroke variation. |
-| Color Steps | 8 | Lower = flatter posterization, higher = smoother |
+| Color Steps | 8 | Lower = flatter tonality, higher = smoother tonal transitions |
+| Pointillism Color Model | OKLab | Use OKLab for perceptual lightness quantization; Legacy keeps previous mode |
+| Pointillism Max Chroma (OKLab) | 0.32 | Lower values reduce saturation clipping and color-flip artifacts |
 | Perceptual HSL Mode | Off | When On, quantizes hue separately from luminance |
 | Hue Steps | 8 | Number of hue palette slots used in Perceptual HSL Mode |
 | Pointillism Coord Source | UV | UV / AltUVHook / ObjectSpace / TriplanarObjectSpace |
@@ -318,13 +324,14 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 
 ## Pointillism grouped preset quick table
 
-| Preset | Stroke Directionality | Stroke Length | Blue Noise Stroke Mix | Color Steps | Perceptual HSL Mode | Hue Steps | Clamp Range | Phase Speed / Hysteresis / Min Dot |
-|---|---:|---:|---:|---:|---|---:|---|---|
-| Conservative | 0.35 | 0.25 | 0.15 | 6 | Off | 6 | (0.05..0.95) | 0.08 / 0.90 / 0.18 |
-| Balanced | 0.50 | 0.40 | 0.30 | 8 | Off | 8 | (0..1) | 0.15 / 0.80 / 0.12 |
-| Aggressive | 0.80 | 0.70 | 0.60 | 12 | Off | 12 | (0..1) | 0.45 / 0.45 / 0.04 |
+| Preset | Stroke Directionality | Stroke Length | Blue Noise Stroke Mix | Color Steps | Color Model | Max Chroma | Perceptual HSL Mode | Hue Steps | Clamp Range | Phase Speed / Hysteresis / Min Dot |
+|---|---:|---:|---:|---:|---|---:|---|---:|---|---|
+| Conservative | 0.35 | 0.25 | 0.15 | 6 | OKLab | 0.24 | Off | 6 | (0.05..0.95) | 0.08 / 0.90 / 0.18 |
+| Balanced | 0.50 | 0.40 | 0.30 | 8 | OKLab | 0.32 | Off | 8 | (0..1) | 0.15 / 0.80 / 0.12 |
+| Aggressive | 0.80 | 0.70 | 0.60 | 12 | OKLab | 0.40 | Off | 12 | (0..1) | 0.45 / 0.45 / 0.04 |
 
-When **Perceptual HSL Mode** is enabled, hue is quantized into fixed palette slots while luminance is dithered separately, producing palette-limited output closer to pointillist painting techniques. In this mode, **Color Steps** controls luminance levels and **Hue Steps** controls hue palette size.
+When **Pointillism Color Model** is set to **OKLab**, pointillism quantizes perceptual lightness while preserving chroma components and then clamps chroma to avoid saturation clipping artifacts.  
+When **Legacy** model is used with **Perceptual HSL Mode**, hue is quantized into fixed palette slots while luminance is dithered separately; in that legacy mode, **Color Steps** controls luminance levels and **Hue Steps** controls hue palette size.
 
 ## Validation scenarios
 

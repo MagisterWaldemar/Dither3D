@@ -46,6 +46,8 @@ float _PointillismBlueNoiseStrokeMix;
 float _PointillismColorSteps;
 float _PointillismPerceptualMode;
 float _PointillismHueSteps;
+float _PointillismColorModel;
+float _PointillismMaxChroma;
 float4 _PointillismClampMinColor;
 float4 _PointillismClampMaxColor;
 float _PointillismLUTBlend;
@@ -72,6 +74,7 @@ static const float MIN_DOT_CONTRAST_REDUCTION_FACTOR = 0.75;
 static const float MIN_VALID_TEXTURE_SIZE = 1.5;
 static const float MIN_POINTILLISM_RANGE = 0.0001;
 static const float PATTERN_SOURCE_BLUENOISE_THRESHOLD = 0.5;
+static const float POINTILLISM_COLORMODE_OKLAB_THRESHOLD = 0.5;
 static const fixed3 POINTILLISM_SOURCE_VIS_UV = fixed3(0.1, 0.7, 1.0);
 static const fixed3 POINTILLISM_SOURCE_VIS_ALT_UV = fixed3(1.0, 0.85, 0.1);
 static const fixed3 POINTILLISM_SOURCE_VIS_OBJECT = fixed3(1.0, 0.4, 0.1);
@@ -125,16 +128,63 @@ void SelectLowerMagnitudeDerivativeSet(float2 uvA, float2 uvB, out float2 dx, ou
     dy = dot(dyA, dyA) < dot(dyB, dyB) ? dyA : dyB;
 }
 
-fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 color)
+float3 RGBtoOKLab(float3 rgb)
+{
+    float3 lms = mul(float3x3(
+        0.4122214708, 0.5363325363, 0.0514459929,
+        0.2119034982, 0.6806995451, 0.1073969566,
+        0.0883024619, 0.2817188376, 0.6299787005), rgb);
+    float3 lmsRoot = pow(max(lms, 0.0), 1.0 / 3.0);
+    return mul(float3x3(
+        0.2104542553, 0.7936177850, -0.0040720468,
+        1.9779984951, -2.4285922050, 0.4505937099,
+        0.0259040371, 0.7827717662, -0.8086757660), lmsRoot);
+}
+
+float3 OKLabToRGB(float3 lab)
+{
+    float3 lmsRoot = mul(float3x3(
+        1.0, 0.3963377774, 0.2158037573,
+        1.0, -0.1055613458, -0.0638541728,
+        1.0, -0.0894841775, -1.2914855480), lab);
+    float3 lms = lmsRoot * lmsRoot * lmsRoot;
+    return mul(float3x3(
+        4.0767416621, -3.3077115913, 0.2309699292,
+        -1.2684380046, 2.6097574011, -0.3413193965,
+        -0.0041960863, -0.7034186147, 1.7076147010), lms);
+}
+
+float2 ResolvePointillismStrokeDirection(float2 dx, float2 dy, float3 worldNormal, float hasWorldData)
+{
+    float2 dominantDerivative = dot(dx, dx) > dot(dy, dy) ? dx : dy;
+    float2 mainDir = dot(dominantDerivative, dominantDerivative) > MIN_CONTRAST_EPSILON ? normalize(dominantDerivative) : float2(1.0, 0.0);
+    float2 derivOrthoDir = float2(-mainDir.y, mainDir.x);
+
+    float source = floor(_PointillismCoordSource + 0.5);
+    float useWorldNormalDirection = hasWorldData * step(1.5, source);
+    if (useWorldNormalDirection > 0.5)
+    {
+        float3 objectNormal = mul((float3x3)unity_WorldToObject, worldNormal);
+        float2 objectDir = float2(objectNormal.x, objectNormal.z);
+        float objectDirLen = length(objectDir);
+        if (objectDirLen > MIN_CONTRAST_EPSILON)
+        {
+            float2 objectOrthoDir = float2(-objectDir.y, objectDir.x) / objectDirLen;
+            return normalize(lerp(derivOrthoDir, objectOrthoDir, 0.75));
+        }
+    }
+
+    return derivOrthoDir;
+}
+
+fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 worldNormal, float hasWorldData, fixed3 color)
 {
     fixed3 clampMin = saturate(_PointillismClampMinColor.rgb);
     fixed3 clampMax = max(clampMin, saturate(_PointillismClampMaxColor.rgb));
     fixed3 clampRange = max(fixed3(MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE), clampMax - clampMin);
     fixed3 clamped = clamp(color, clampMin, clampMax);
 
-    float2 dominantDerivative = dot(dx, dx) > dot(dy, dy) ? dx : dy;
-    float2 mainDir = dot(dominantDerivative, dominantDerivative) > MIN_CONTRAST_EPSILON ? normalize(dominantDerivative) : float2(1.0, 0.0);
-    float2 orthoDir = float2(-mainDir.y, mainDir.x);
+    float2 orthoDir = ResolvePointillismStrokeDirection(dx, dy, worldNormal, hasWorldData);
     fixed blueAngleRaw = SampleTemporalRankWithFallback(frac(uvPointillism), 0.5);
     float blueAngle = blueAngleRaw * 6.28318530718;
     float2 blueDir = float2(cos(blueAngle), sin(blueAngle));
@@ -150,7 +200,24 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
     fixed rank = SamplePointillismRank(frac(uvBase + blendedDir * scaleAwareSpread * spread));
     fixed3 remapped = clamped;
 
-    if (_PointillismPerceptualMode > 0.5)
+    if (_PointillismColorModel > POINTILLISM_COLORMODE_OKLAB_THRESHOLD)
+    {
+        float3 lab = RGBtoOKLab(clamped);
+        float maxChroma = max(MIN_POINTILLISM_RANGE, _PointillismMaxChroma);
+        float chroma = length(lab.yz);
+        if (chroma > maxChroma)
+            lab.yz *= maxChroma / chroma;
+
+        float steps = max(2.0, _PointillismColorSteps);
+        float scaledLightness = saturate(lab.x) * (steps - 1.0);
+        float lowLightness = floor(scaledLightness) / (steps - 1.0);
+        float highLightness = ceil(scaledLightness) / (steps - 1.0);
+        float fracLightness = frac(scaledLightness);
+        lab.x = (rank <= fracLightness) ? highLightness : lowLightness;
+
+        remapped = clamp(saturate(OKLabToRGB(lab)), clampMin, clampMax);
+    }
+    else if (_PointillismPerceptualMode > 0.5)
     {
         fixed3 hsl = RGBtoHSL(clamped);
         float hueSteps = max(2.0, _PointillismHueSteps);
@@ -564,14 +631,14 @@ float2 RotateUV(float2 uv, float2 xUnitDir)
     return uv.x * xUnitDir + uv.y * float2(-xUnitDir.y, xUnitDir.x);
 }
 
-fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 screenPos, float2 dx, float2 dy, fixed4 color, fixed3 pointillismSourceVis, fixed3 pointillismTriplanarWeights)
+fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float3 worldNormal, float hasWorldData, float4 screenPos, float2 dx, float2 dy, fixed4 color, fixed3 pointillismSourceVis, fixed3 pointillismTriplanarWeights)
 {
     // Adjust brightness according to shader exposure and offset properties.
     color.rgb = saturate(color.rgb * _InputExposure + _InputOffset);
 
     if (_PointillismEnable > 0.5)
     {
-        color.rgb = ApplyPointillismColor(uvPointillism, dx, dy, color.rgb);
+        color.rgb = ApplyPointillismColor(uvPointillism, dx, dy, worldNormal, hasWorldData, color.rgb);
 
         #if (DEBUG_FRACTAL)
             float hasTriplanarWeights = step(MIN_CONTRAST_EPSILON, pointillismTriplanarWeights.x + pointillismTriplanarWeights.y + pointillismTriplanarWeights.z);
@@ -622,7 +689,7 @@ fixed4 GetDither3DColorWorld(float2 uv_DitherTex, float2 uv_DitherTexAlt, float3
     fixed3 pointillismSourceVis;
     fixed3 pointillismTriplanarWeights;
     ResolvePointillismUVAndDebugData(uv_DitherTex, uv_DitherTexAlt, worldPos, worldNormal, 1.0, uvPointillism, pointillismSourceVis, pointillismTriplanarWeights);
-    return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
+    return GetDither3DColor_(uv_DitherTex, uvPointillism, worldNormal, 1.0, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
 }
 
 fixed4 GetDither3DColor(float2 uv_DitherTex, float4 screenPos, fixed4 color)
@@ -634,7 +701,7 @@ fixed4 GetDither3DColor(float2 uv_DitherTex, float4 screenPos, fixed4 color)
     fixed3 pointillismSourceVis;
     fixed3 pointillismTriplanarWeights;
     ResolvePointillismUVAndDebugData(uv_DitherTex, uv_DitherTex, float3(0, 0, 0), float3(0, 1, 0), 0.0, uvPointillism, pointillismSourceVis, pointillismTriplanarWeights);
-    return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
+    return GetDither3DColor_(uv_DitherTex, uvPointillism, float3(0, 1, 0), 0.0, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
 }
 
 fixed4 GetDither3DColorAltUV(float2 uv_DitherTex, float2 uv_DitherTexAlt, float4 screenPos, fixed4 color)
@@ -646,5 +713,5 @@ fixed4 GetDither3DColorAltUV(float2 uv_DitherTex, float2 uv_DitherTexAlt, float4
     fixed3 pointillismSourceVis;
     fixed3 pointillismTriplanarWeights;
     ResolvePointillismUVAndDebugData(uv_DitherTex, uv_DitherTexAlt, float3(0, 0, 0), float3(0, 1, 0), 0.0, uvPointillism, pointillismSourceVis, pointillismTriplanarWeights);
-    return GetDither3DColor_(uv_DitherTex, uvPointillism, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
+    return GetDither3DColor_(uv_DitherTex, uvPointillism, float3(0, 1, 0), 0.0, screenPos, dx, dy, color, pointillismSourceVis, pointillismTriplanarWeights);
 }

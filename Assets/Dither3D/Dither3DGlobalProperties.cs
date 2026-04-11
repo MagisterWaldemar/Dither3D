@@ -93,6 +93,12 @@ public class Dither3DGlobalProperties : MonoBehaviour
     [OverrideProperty] public float pointillismColorSteps = 8f;
     [HideInInspector] public bool pointillismColorStepsOverride;
 
+    [OverrideProperty] public float pointillismColorModel = 1f;
+    [HideInInspector] public bool pointillismColorModelOverride;
+
+    [OverrideProperty] public float pointillismMaxChroma = 0.32f;
+    [HideInInspector] public bool pointillismMaxChromaOverride;
+
     [OverrideProperty] public bool pointillismPerceptualMode;
     [HideInInspector] public bool pointillismPerceptualModeOverride;
 
@@ -218,6 +224,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 out float presetStrokeLength,
                 out float presetBlueNoiseStrokeMix,
                 out float presetColorSteps,
+                out float presetColorModel,
+                out float presetMaxChroma,
                 out float presetPerceptualMode,
                 out float presetHueSteps,
                 out Color presetClampMin,
@@ -229,6 +237,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_PointillismStrokeLength", presetStrokeLength, ref changed);
             SetShaderOverride("_PointillismBlueNoiseStrokeMix", presetBlueNoiseStrokeMix, ref changed);
             SetShaderOverride("_PointillismColorSteps", presetColorSteps, ref changed);
+            SetShaderOverride("_PointillismColorModel", presetColorModel, ref changed);
+            SetShaderOverride("_PointillismMaxChroma", presetMaxChroma, ref changed);
             SetShaderOverride("_PointillismPerceptualMode", presetPerceptualMode, ref changed);
             SetShaderOverride("_PointillismHueSteps", presetHueSteps, ref changed);
             SetShaderColorOverride("_PointillismClampMinColor", presetClampMin, ref changed);
@@ -245,6 +255,10 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_PointillismBlueNoiseStrokeMix", pointillismBlueNoiseStrokeMix, ref changed);
         if (pointillismColorStepsOverride)
             SetShaderOverride("_PointillismColorSteps", pointillismColorSteps, ref changed);
+        if (pointillismColorModelOverride)
+            SetShaderOverride("_PointillismColorModel", pointillismColorModel, ref changed);
+        if (pointillismMaxChromaOverride)
+            SetShaderOverride("_PointillismMaxChroma", pointillismMaxChroma, ref changed);
         if (pointillismPerceptualModeOverride)
             SetShaderOverride("_PointillismPerceptualMode", pointillismPerceptualMode ? 1f : 0f, ref changed);
         if (pointillismHueStepsOverride)
@@ -339,6 +353,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
         out float strokeLength,
         out float blueNoiseStrokeMix,
         out float colorSteps,
+        out float colorModel,
+        out float maxChroma,
         out float perceptualMode,
         out float hueSteps,
         out Color clampMin,
@@ -354,6 +370,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 strokeLength = 0.25f;
                 blueNoiseStrokeMix = 0.15f;
                 colorSteps = 6f;
+                colorModel = 1f;
+                maxChroma = 0.24f;
                 perceptualMode = 0f;
                 hueSteps = 6f;
                 clampMin = new Color(0.05f, 0.05f, 0.05f, 1f);
@@ -367,6 +385,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 strokeLength = 0.70f;
                 blueNoiseStrokeMix = 0.60f;
                 colorSteps = 12f;
+                colorModel = 1f;
+                maxChroma = 0.40f;
                 perceptualMode = 0f;
                 hueSteps = 12f;
                 clampMin = Color.black;
@@ -380,6 +400,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 strokeLength = 0.40f;
                 blueNoiseStrokeMix = 0.30f;
                 colorSteps = 8f;
+                colorModel = 1f;
+                maxChroma = 0.32f;
                 perceptualMode = 0f;
                 hueSteps = 8f;
                 clampMin = Color.black;
