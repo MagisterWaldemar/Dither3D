@@ -40,6 +40,56 @@ To install a specific version tag (once tags are published), append `#<tag>`, e.
 https://github.com/MagisterWaldemar/Dither3D.git?path=/Assets/Dither3D#1.0.0
 ```
 
+## How to Use
+
+### 1. Install the package
+
+Install via the **Unity Package Manager** as described in the [Installation](#installation-via-unity-package-manager) section above, or simply copy the `Assets/Dither3D` folder into your Unity project.
+
+### 2. Apply a Dither 3D shader to a material
+
+Dither 3D provides the following ready-to-use shaders:
+
+| Shader | Intended use |
+|---|---|
+| `Dither 3D/Opaque` | Standard opaque surfaces |
+| `Dither 3D/Cutout` | Alpha-tested (cutout) surfaces |
+| `Dither 3D/Particle Add` | Additive particle effects |
+| `Dither 3D/Skybox` | Skybox rendering |
+
+To apply dithering to a mesh or object:
+
+1. Select (or create) a material in the **Project** window.
+2. In the **Inspector**, click the **Shader** dropdown at the top of the material.
+3. Choose **Dither 3D → Opaque** (or whichever variant matches your use case).
+4. The material Inspector will now show the dither-specific properties (`Pattern`, `Dot Scale`, etc.).
+   The **Pattern** dropdown uses the `DitherPatternPropertyDrawer` editor extension, which automatically assigns the correct 3D dither texture and ramp texture for the chosen pattern size (`1×1`, `2×2`, `4×4`, or `8×8`).
+
+### 3. Convert an existing material to use dithering
+
+To switch an already-configured material (e.g., a Standard shader material) to dithering:
+
+1. Select the material in the **Project** window.
+2. In the **Inspector**, click the **Shader** dropdown and select **Dither 3D → Opaque** (or the appropriate variant).
+3. Re-assign your existing textures (`Albedo`, `Normal Map`, `Emission`, etc.) in the material Inspector — these properties are preserved with the same names where applicable.
+4. Adjust `Exposure` and `Offset` under **Dither Input Brightness** to match the previous brightness of the material.
+5. Select a **Pattern** size. Larger patterns (e.g. `8×8`) produce finer dot detail.
+
+> **Note:** There is no automated batch conversion utility. Each material must be reassigned to a Dither 3D shader individually via the Inspector.
+
+### 4. Add the `Dither3DGlobalProperties` component
+
+Global settings such as **Color Mode** (Grayscale / RGB / CMYK), **Inverse Dots**, and **Radial Compensation** are controlled via the `Dither3DGlobalProperties` component:
+
+1. Select (or create) a GameObject in the scene — typically on a dedicated manager object or the main camera.
+2. Click **Add Component** and search for **Dither 3D Global Properties**.
+3. Configure the desired **Color Mode**, **Inverse Dots**, and other global toggles.
+4. The component automatically finds all materials in the project that use a Dither 3D shader (identified by the `_DitherTex` property) and propagates global shader keywords to them at runtime.
+
+The component also lets you override per-material properties (dot scale, contrast, etc.) for all dither materials at once, which is useful for global artistic adjustments or platform optimization.
+
+---
+
 ## Dither Properties
 
 Each material that uses the dithering has the following dither-specific number properties:
