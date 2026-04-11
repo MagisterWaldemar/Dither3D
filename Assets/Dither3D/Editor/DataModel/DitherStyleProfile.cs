@@ -29,4 +29,16 @@ public class DitherStyleProfile : ScriptableObject
     /// Optional notes for the style profile.
     /// </summary>
     public string Notes => notes;
+
+    /// <summary>
+    /// Creates a non-persisted style profile for editor tooling scenarios.
+    /// </summary>
+    public static DitherStyleProfile CreateRuntimeProfile(string runtimeProfileName, ShaderAdapterRegistry runtimeRegistry, string runtimeNotes = "")
+    {
+        DitherStyleProfile profile = CreateInstance<DitherStyleProfile>();
+        profile.profileName = string.IsNullOrEmpty(runtimeProfileName) ? "RuntimeProfile" : runtimeProfileName;
+        profile.shaderAdapterRegistry = runtimeRegistry;
+        profile.notes = runtimeNotes ?? string.Empty;
+        return profile;
+    }
 }

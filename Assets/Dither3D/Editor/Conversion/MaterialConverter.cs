@@ -47,6 +47,8 @@ public class MaterialConverter
             return result;
         }
 
+        result.AdapterUsed = mapping.SourceShaderName + " -> " + mapping.TargetShader.name;
+
         var targetMaterial = new Material(mapping.TargetShader);
         targetMaterial.name = BuildDeterministicMaterialName(sourceMaterial, styleProfile);
         result.ConvertedMaterial = targetMaterial;
@@ -54,6 +56,26 @@ public class MaterialConverter
         ApplyRules(sourceMaterial, targetMaterial, mapping, result);
         WarnUnmappedSourceProperties(sourceMaterial.shader, mapping, result);
 
+        return result;
+    }
+
+    /// <summary>
+    /// Converts a source material without writing any assets and reports the deterministic output path.
+    /// </summary>
+    public ConversionResult DryRunConvert(Material sourceMaterial, DitherStyleProfile styleProfile, string outputDirectory = null)
+    {
+        ConversionResult result = Convert(sourceMaterial, styleProfile);
+        if (!result.Success || sourceMaterial == null)
+            return result;
+
+        string resolvedDirectory = ResolveOutputDirectory(sourceMaterial, outputDirectory);
+        if (string.IsNullOrEmpty(resolvedDirectory))
+        {
+            result.AddError("Failed to resolve output directory.");
+            return result;
+        }
+
+        result.OutputAssetPath = BuildDeterministicAssetPath(resolvedDirectory, sourceMaterial, styleProfile);
         return result;
     }
 

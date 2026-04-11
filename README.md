@@ -75,7 +75,9 @@ To switch an already-configured material (e.g., a Standard shader material) to d
 4. Adjust `Exposure` and `Offset` under **Dither Input Brightness** to match the previous brightness of the material.
 5. Select a **Pattern** size. Larger patterns (e.g. `8×8`) produce finer dot detail.
 
-> **Note:** There is no automated batch conversion utility. Each material must be reassigned to a Dither 3D shader individually via the Inspector.
+> **Batch prefab conversion:** Open **Tools → Dither 3D → Prefab Conversion** to run dry-run or real conversion on selected prefabs.  
+> - **Dry Run** computes deterministic output paths and a manifest preview with zero asset writes.  
+> - **Convert** writes generated converted materials, prefab variants, and a JSON conversion manifest report.
 
 > **Editor API note:** A deterministic editor-only `MaterialConverter` service is available for tool integrations. It converts one source material into a new dither material via `ShaderAdapterRegistry` + `DitherStyleProfile` rules, warns for unmapped properties, and does not guess implicit mappings.
 
@@ -326,7 +328,7 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 Current limitations:
 - Conversion is rule-driven and only applies explicitly configured source-to-target mappings.
 - Rule behavior currently focuses on direct copy, scale/bias, float constant fallback, and explicit skip-with-warning.
-- Conversion tooling is service-level only (no prefab-variant conversion workflow, no batch scene scanning UI).
+- Conversion tooling supports selected-prefab batch workflows and deterministic reporting, but still does not perform scene/build-wide discovery.
 
 Future extension points:
 - Add additional rule kinds for richer type transforms and multi-property composition.

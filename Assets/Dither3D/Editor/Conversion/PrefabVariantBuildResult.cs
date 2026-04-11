@@ -70,18 +70,20 @@ public class PrefabVariantBuildResult
 /// </summary>
 public class PrefabMaterialReplacement
 {
-    public PrefabMaterialReplacement(string rendererPath, int slotIndex, string sourceMaterialPath, string convertedMaterialPath)
+    public PrefabMaterialReplacement(string rendererPath, int slotIndex, string sourceMaterialPath, string convertedMaterialPath, string adapterUsed = null)
     {
         RendererPath = rendererPath;
         SlotIndex = slotIndex;
         SourceMaterialPath = sourceMaterialPath;
         ConvertedMaterialPath = convertedMaterialPath;
+        AdapterUsed = adapterUsed;
     }
 
     public string RendererPath { get; }
     public int SlotIndex { get; }
     public string SourceMaterialPath { get; }
     public string ConvertedMaterialPath { get; }
+    public string AdapterUsed { get; }
 }
 
 /// <summary>
@@ -89,14 +91,16 @@ public class PrefabMaterialReplacement
 /// </summary>
 public class PrefabMaterialSkip
 {
-    public PrefabMaterialSkip(string rendererPath, int slotIndex, string reason)
+    public PrefabMaterialSkip(string rendererPath, int slotIndex, string reason, string sourceMaterialPath = null)
     {
         RendererPath = rendererPath;
         SlotIndex = slotIndex;
         Reason = reason;
+        SourceMaterialPath = sourceMaterialPath;
     }
 
     public string RendererPath { get; }
     public int SlotIndex { get; }
     public string Reason { get; }
+    public string SourceMaterialPath { get; }
 }

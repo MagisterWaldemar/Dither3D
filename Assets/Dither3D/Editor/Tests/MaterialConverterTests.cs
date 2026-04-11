@@ -114,6 +114,23 @@ public class MaterialConverterTests
         Assert.That(ContainsWarningPrefix(result, "Unmapped source property"), Is.True);
     }
 
+    [Test]
+    public void DryRunConvert_DoesNotWriteAsset_AndReportsDeterministicPath()
+    {
+        Material source = CreateSourceMaterial();
+        source.name = "DryRunSource";
+        DitherStyleProfile profile = CreateStyleProfile(CreateRule("_Color", "_Color", PropertyRemapRuleKind.DirectCopy));
+
+        MaterialConverter converter = new MaterialConverter();
+        ConversionResult result = converter.DryRunConvert(source, profile, TempOutputDirectory);
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(string.IsNullOrEmpty(result.OutputAssetPath), Is.False);
+        Assert.That(result.OutputAssetPath.StartsWith(TempOutputDirectory + "/"), Is.True);
+        Assert.That(AssetDatabase.LoadAssetAtPath<Material>(result.OutputAssetPath), Is.Null);
+        Assert.That(string.IsNullOrEmpty(result.AdapterUsed), Is.False);
+    }
+
     static bool ContainsWarningPrefix(ConversionResult result, string prefix)
     {
         for (int i = 0; i < result.Warnings.Count; i++)

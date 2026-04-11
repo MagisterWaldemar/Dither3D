@@ -52,6 +52,54 @@ public class PrefabVariantBuilder
         string variantOutputDirectory = null,
         string materialOutputDirectory = null)
     {
+        return BuildVariantInternal(sourcePrefabAsset, styleProfile, variantOutputDirectory, materialOutputDirectory, false);
+    }
+
+    /// <summary>
+    /// Performs a dry-run variant build and material conversion with deterministic output paths but no asset writes.
+    /// </summary>
+    public PrefabVariantBuildResult BuildVariantDryRun(
+        string sourcePrefabPath,
+        DitherStyleProfile styleProfile,
+        string variantOutputDirectory = null,
+        string materialOutputDirectory = null)
+    {
+        var result = new PrefabVariantBuildResult();
+        if (string.IsNullOrEmpty(sourcePrefabPath))
+        {
+            result.AddError("Source prefab path is null or empty.");
+            return result;
+        }
+
+        GameObject sourcePrefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePrefabPath);
+        if (sourcePrefabAsset == null)
+        {
+            result.AddError("No prefab asset found at path '" + sourcePrefabPath + "'.");
+            return result;
+        }
+
+        return BuildVariantDryRun(sourcePrefabAsset, styleProfile, variantOutputDirectory, materialOutputDirectory);
+    }
+
+    /// <summary>
+    /// Performs a dry-run variant build and material conversion with deterministic output paths but no asset writes.
+    /// </summary>
+    public PrefabVariantBuildResult BuildVariantDryRun(
+        GameObject sourcePrefabAsset,
+        DitherStyleProfile styleProfile,
+        string variantOutputDirectory = null,
+        string materialOutputDirectory = null)
+    {
+        return BuildVariantInternal(sourcePrefabAsset, styleProfile, variantOutputDirectory, materialOutputDirectory, true);
+    }
+
+    PrefabVariantBuildResult BuildVariantInternal(
+        GameObject sourcePrefabAsset,
+        DitherStyleProfile styleProfile,
+        string variantOutputDirectory,
+        string materialOutputDirectory,
+        bool dryRun)
+    {
         var result = new PrefabVariantBuildResult();
         if (sourcePrefabAsset == null)
         {
@@ -74,10 +122,28 @@ public class PrefabVariantBuilder
 
         string resolvedVariantDirectory = ResolveVariantOutputDirectory(sourcePrefabPath, variantOutputDirectory);
         string resolvedMaterialDirectory = ResolveMaterialOutputDirectory(resolvedVariantDirectory, materialOutputDirectory);
+
+        string variantPath = BuildDeterministicVariantAssetPath(resolvedVariantDirectory, sourcePrefabAsset, styleProfile);
+        result.VariantAssetPath = variantPath;
+
+        if (dryRun)
+        {
+            GameObject sourceContents = PrefabUtility.LoadPrefabContents(sourcePrefabPath);
+            try
+            {
+                ReplaceRendererMaterials(sourceContents, styleProfile, resolvedMaterialDirectory, result, true);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(sourceContents);
+            }
+
+            return result;
+        }
+
         EnsureFolderExists(resolvedVariantDirectory);
         EnsureFolderExists(resolvedMaterialDirectory);
 
-        string variantPath = BuildDeterministicVariantAssetPath(resolvedVariantDirectory, sourcePrefabAsset, styleProfile);
         if (AssetDatabase.LoadAssetAtPath<GameObject>(variantPath) != null)
             AssetDatabase.DeleteAsset(variantPath);
 
@@ -93,7 +159,7 @@ public class PrefabVariantBuilder
                 return result;
             }
 
-            ReplaceRendererMaterials(instanceRoot, styleProfile, resolvedMaterialDirectory, result);
+            ReplaceRendererMaterials(instanceRoot, styleProfile, resolvedMaterialDirectory, result, false);
 
             GameObject variantAsset = PrefabUtility.SaveAsPrefabAsset(instanceRoot, variantPath);
             if (variantAsset == null)
@@ -103,7 +169,6 @@ public class PrefabVariantBuilder
             }
 
             AssetDatabase.SaveAssets();
-            result.VariantAssetPath = variantPath;
             return result;
         }
         finally
@@ -131,7 +196,8 @@ public class PrefabVariantBuilder
         GameObject instanceRoot,
         DitherStyleProfile styleProfile,
         string materialOutputDirectory,
-        PrefabVariantBuildResult result)
+        PrefabVariantBuildResult result,
+        bool dryRun)
     {
         var conversionCache = new Dictionary<Material, ConversionResult>();
         Renderer[] renderers = instanceRoot.GetComponentsInChildren<Renderer>(true);
@@ -154,7 +220,7 @@ public class PrefabVariantBuilder
                 Material sourceMaterial = slots[slotIndex];
                 if (sourceMaterial == null)
                 {
-                    result.AddSkippedSlot(new PrefabMaterialSkip(rendererPath, slotIndex, "Source slot has no material."));
+                    result.AddSkippedSlot(new PrefabMaterialSkip(rendererPath, slotIndex, "Source slot has no material.", string.Empty));
                     continue;
                 }
 
@@ -163,13 +229,16 @@ public class PrefabVariantBuilder
                     result.AddSkippedSlot(new PrefabMaterialSkip(
                         rendererPath,
                         slotIndex,
-                        "Renderer is part of an immutable nested prefab instance and cannot be overridden."));
+                        "Renderer is part of an immutable nested prefab instance and cannot be overridden.",
+                        AssetDatabase.GetAssetPath(sourceMaterial)));
                     continue;
                 }
 
                 if (!conversionCache.TryGetValue(sourceMaterial, out ConversionResult conversionResult))
                 {
-                    conversionResult = materialConverter.ConvertAndPersist(sourceMaterial, styleProfile, materialOutputDirectory);
+                    conversionResult = dryRun
+                        ? materialConverter.DryRunConvert(sourceMaterial, styleProfile, materialOutputDirectory)
+                        : materialConverter.ConvertAndPersist(sourceMaterial, styleProfile, materialOutputDirectory);
                     conversionCache[sourceMaterial] = conversionResult;
                 }
 
@@ -184,15 +253,24 @@ public class PrefabVariantBuilder
                 if (!conversionResult.Success || conversionResult.ConvertedMaterial == null)
                 {
                     string reason = BuildSkipReason(conversionResult);
-                    result.AddSkippedSlot(new PrefabMaterialSkip(rendererPath, slotIndex, reason));
+                    result.AddSkippedSlot(new PrefabMaterialSkip(rendererPath, slotIndex, reason, AssetDatabase.GetAssetPath(sourceMaterial)));
                     continue;
                 }
 
                 string sourcePath = AssetDatabase.GetAssetPath(sourceMaterial);
                 string convertedPath = conversionResult.OutputAssetPath;
-                slots[slotIndex] = conversionResult.ConvertedMaterial;
-                hasChanges = true;
-                result.AddReplacement(new PrefabMaterialReplacement(rendererPath, slotIndex, sourcePath, convertedPath));
+                if (!dryRun)
+                {
+                    slots[slotIndex] = conversionResult.ConvertedMaterial;
+                    hasChanges = true;
+                }
+
+                result.AddReplacement(new PrefabMaterialReplacement(
+                    rendererPath,
+                    slotIndex,
+                    sourcePath,
+                    convertedPath,
+                    conversionResult.AdapterUsed));
             }
 
             if (hasChanges)
