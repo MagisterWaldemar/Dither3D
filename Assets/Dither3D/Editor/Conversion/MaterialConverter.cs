@@ -104,7 +104,61 @@ public class MaterialConverter
         AssetDatabase.CreateAsset(result.ConvertedMaterial, outputPath);
         AssetDatabase.SaveAssets();
         result.OutputAssetPath = outputPath;
+
+        GeneratedMaterialLinkMetadata metadata = GeneratedMaterialLinkMetadataUtility.CreateFor(sourceMaterial, styleProfile);
+        string metadataError;
+        if (!GeneratedMaterialLinkMetadataUtility.WriteAtPath(outputPath, metadata, out metadataError))
+            result.AddWarning("Generated material link metadata was not written: " + metadataError);
+
         return result;
+    }
+
+    /// <summary>
+    /// Returns mapped target property names for a source material/profile pair.
+    /// </summary>
+    public bool TryGetMappedTargetProperties(Material sourceMaterial, DitherStyleProfile styleProfile, out HashSet<string> mappedTargetProperties, out string error)
+    {
+        mappedTargetProperties = new HashSet<string>(StringComparer.Ordinal);
+        error = string.Empty;
+
+        if (sourceMaterial == null)
+        {
+            error = "Source material is null.";
+            return false;
+        }
+
+        if (styleProfile == null)
+        {
+            error = "Style profile is null.";
+            return false;
+        }
+
+        if (styleProfile.ShaderAdapterRegistry == null)
+        {
+            error = "Style profile is missing Shader Adapter Registry.";
+            return false;
+        }
+
+        ShaderAdapterMapping mapping = FindMapping(sourceMaterial.shader, styleProfile.ShaderAdapterRegistry);
+        if (mapping == null)
+        {
+            error = "No shader adapter mapping found for source shader '" + sourceMaterial.shader.name + "'.";
+            return false;
+        }
+
+        IReadOnlyList<PropertyRemapRule> rules = mapping.PropertyRemapRules;
+        for (int i = 0; i < rules.Count; i++)
+        {
+            PropertyRemapRule rule = rules[i];
+            if (rule == null)
+                continue;
+
+            string targetProperty = (rule.TargetPropertyName ?? string.Empty).Trim();
+            if (!string.IsNullOrEmpty(targetProperty))
+                mappedTargetProperties.Add(targetProperty);
+        }
+
+        return true;
     }
 
     /// <summary>
