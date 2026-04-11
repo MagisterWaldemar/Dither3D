@@ -197,6 +197,7 @@ Shader "Dither 3D/URP/Opaque"
 
                 color += emission;
                 color = MixFog(color, input.fogFactor);
+                color = color / (1.0 + color);
 
                 fixed4 finalColor = fixed4(color, albedoSample.a);
                 return GetDither3DColorWorld(input.uvDither, input.uvMain, input.worldPos, normalWS, input.screenPos, finalColor);
