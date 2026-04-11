@@ -220,7 +220,7 @@ public class PrefabVariantBuilder
                 Material sourceMaterial = slots[slotIndex];
                 if (sourceMaterial == null)
                 {
-                    result.AddSkippedSlot(new PrefabMaterialSkip(rendererPath, slotIndex, "Source slot has no material.", string.Empty));
+                    result.AddSkippedSlot(new PrefabMaterialSkip(rendererPath, slotIndex, "Source slot has no material."));
                     continue;
                 }
 

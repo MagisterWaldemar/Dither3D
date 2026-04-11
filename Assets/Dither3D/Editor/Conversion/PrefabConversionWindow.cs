@@ -262,7 +262,7 @@ public class PrefabConversionWindow : EditorWindow
             PrefabMaterialSkip skip = result.SkippedSlots[i];
             var entry = new ConversionManifestEntry();
             entry.entryType = "skipped";
-            entry.source = skip.SourceMaterialPath;
+            entry.source = string.IsNullOrEmpty(skip.SourceMaterialPath) ? "N/A" : skip.SourceMaterialPath;
             entry.output = string.Empty;
             entry.adapterUsed = "N/A";
             entry.context = sourcePath + "::" + skip.RendererPath + " [slot " + skip.SlotIndex + "]";
