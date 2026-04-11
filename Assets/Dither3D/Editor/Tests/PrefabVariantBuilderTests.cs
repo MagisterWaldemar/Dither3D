@@ -150,6 +150,55 @@ public class PrefabVariantBuilderTests
         }
     }
 
+    [Test]
+    public void BuildVariantPreview_PerformsInMemoryConversionWithoutAssetWrites()
+    {
+        CreateFolder(TempRoot);
+        Material source = CreateMaterialAsset(TempRoot + "/Preview_Source.mat", "Standard");
+        string sourcePrefabPath = TempRoot + "/Preview_Source.prefab";
+        CreateSourcePrefab(sourcePrefabPath, source, source, source);
+
+        DitherStyleProfile profile = CreateStyleProfile(CreateRule("_Color", "_Color", PropertyRemapRuleKind.DirectCopy));
+        GameObject sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePrefabPath);
+        Assert.That(sourcePrefab, Is.Not.Null);
+
+        string[] guidsBefore = AssetDatabase.FindAssets(string.Empty, new[] { TempRoot });
+        PrefabVariantBuilder builder = new PrefabVariantBuilder();
+        PrefabVariantBuildResult result = builder.BuildVariantPreview(sourcePrefab, profile, out GameObject previewInstance);
+        string[] guidsAfter = AssetDatabase.FindAssets(string.Empty, new[] { TempRoot });
+
+        try
+        {
+            Assert.That(result.Success, Is.True);
+            Assert.That(previewInstance, Is.Not.Null);
+            Assert.That(result.Replacements.Count, Is.GreaterThan(0));
+            Assert.That(result.TemporaryMaterials.Count, Is.GreaterThan(0));
+            Assert.That(guidsAfter.Length, Is.EqualTo(guidsBefore.Length));
+            Assert.That(EditorUtility.IsPersistent(previewInstance), Is.False);
+
+            Renderer renderer = previewInstance.transform.Find("RendererA").GetComponent<Renderer>();
+            Material converted = renderer.sharedMaterials[0];
+            Assert.That(converted, Is.Not.Null);
+            Assert.That(converted, Is.Not.EqualTo(source));
+            Assert.That(string.IsNullOrEmpty(AssetDatabase.GetAssetPath(converted)), Is.True);
+        }
+        finally
+        {
+            if (result != null)
+            {
+                for (int i = 0; i < result.TemporaryMaterials.Count; i++)
+                {
+                    Material material = result.TemporaryMaterials[i];
+                    if (material != null)
+                        Object.DestroyImmediate(material);
+                }
+            }
+
+            if (previewInstance != null)
+                Object.DestroyImmediate(previewInstance);
+        }
+    }
+
     static void AssertSourceMaterialsUnchanged(GameObject sourceContents, Material sourceA, Material sourceB, Material unsupported)
     {
         Renderer rendererA = sourceContents.transform.Find("RendererA").GetComponent<Renderer>();

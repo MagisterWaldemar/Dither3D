@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 /// <summary>
 /// Holds variant generation output and diagnostics.
@@ -7,6 +8,7 @@ public class PrefabVariantBuildResult
 {
     readonly List<PrefabMaterialReplacement> replacements = new List<PrefabMaterialReplacement>();
     readonly List<PrefabMaterialSkip> skippedSlots = new List<PrefabMaterialSkip>();
+    readonly List<Material> temporaryMaterials = new List<Material>();
     readonly List<string> warnings = new List<string>();
     readonly List<string> errors = new List<string>();
 
@@ -36,6 +38,11 @@ public class PrefabVariantBuildResult
     public IReadOnlyList<string> Warnings => warnings;
 
     /// <summary>
+    /// In-memory temporary materials created for preview-only conversion.
+    /// </summary>
+    public IReadOnlyList<Material> TemporaryMaterials => temporaryMaterials;
+
+    /// <summary>
     /// Fatal build errors.
     /// </summary>
     public IReadOnlyList<string> Errors => errors;
@@ -56,6 +63,12 @@ public class PrefabVariantBuildResult
     {
         if (!string.IsNullOrEmpty(message))
             warnings.Add(message);
+    }
+
+    internal void AddTemporaryMaterial(Material material)
+    {
+        if (material != null && !temporaryMaterials.Contains(material))
+            temporaryMaterials.Add(material);
     }
 
     internal void AddError(string message)

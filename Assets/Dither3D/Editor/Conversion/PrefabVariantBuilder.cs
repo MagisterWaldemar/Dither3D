@@ -93,6 +93,58 @@ public class PrefabVariantBuilder
         return BuildVariantInternal(sourcePrefabAsset, styleProfile, variantOutputDirectory, materialOutputDirectory, true);
     }
 
+    /// <summary>
+    /// Builds an in-memory converted prefab instance for editor preview without writing assets.
+    /// Caller owns the returned instance and must destroy it via DestroyImmediate.
+    /// </summary>
+    public PrefabVariantBuildResult BuildVariantPreview(GameObject sourcePrefabAsset, DitherStyleProfile styleProfile, out GameObject previewInstanceRoot)
+    {
+        previewInstanceRoot = null;
+        var result = new PrefabVariantBuildResult();
+
+        if (sourcePrefabAsset == null)
+        {
+            result.AddError("Source prefab asset is null.");
+            return result;
+        }
+
+        if (styleProfile == null)
+        {
+            result.AddError("Style profile is null.");
+            return result;
+        }
+
+        string sourcePrefabPath = AssetDatabase.GetAssetPath(sourcePrefabAsset);
+        if (string.IsNullOrEmpty(sourcePrefabPath))
+        {
+            result.AddError("Source prefab must be a persisted asset.");
+            return result;
+        }
+
+        previewInstanceRoot = PrefabUtility.InstantiatePrefab(sourcePrefabAsset) as GameObject;
+        if (previewInstanceRoot == null)
+        {
+            result.AddError("Failed to instantiate source prefab for preview conversion.");
+            return result;
+        }
+
+        previewInstanceRoot.name = sourcePrefabAsset.name + "__ConvertedPreview";
+        previewInstanceRoot.hideFlags = HideFlags.HideAndDontSave;
+        ApplyHideFlagsRecursively(previewInstanceRoot.transform, HideFlags.HideAndDontSave);
+        result.VariantAssetPath = "InMemoryPreview/" + sourcePrefabAsset.name + ".prefab";
+
+        try
+        {
+            ReplaceRendererMaterials(previewInstanceRoot, styleProfile, "InMemoryPreview/ConvertedMaterials", result, false, true);
+            return result;
+        }
+        catch (System.Exception exception)
+        {
+            result.AddError("Preview conversion failed: " + exception.Message);
+            return result;
+        }
+    }
+
     PrefabVariantBuildResult BuildVariantInternal(
         GameObject sourcePrefabAsset,
         DitherStyleProfile styleProfile,
@@ -197,7 +249,8 @@ public class PrefabVariantBuilder
         DitherStyleProfile styleProfile,
         string materialOutputDirectory,
         PrefabVariantBuildResult result,
-        bool dryRun)
+        bool dryRun,
+        bool inMemoryOnly = false)
     {
         var conversionCache = new Dictionary<Material, ConversionResult>();
         Renderer[] renderers = instanceRoot.GetComponentsInChildren<Renderer>(true);
@@ -236,9 +289,19 @@ public class PrefabVariantBuilder
 
                 if (!conversionCache.TryGetValue(sourceMaterial, out ConversionResult conversionResult))
                 {
-                    conversionResult = dryRun
-                        ? materialConverter.DryRunConvert(sourceMaterial, styleProfile, materialOutputDirectory)
-                        : materialConverter.ConvertAndPersist(sourceMaterial, styleProfile, materialOutputDirectory);
+                    if (inMemoryOnly)
+                    {
+                        conversionResult = materialConverter.Convert(sourceMaterial, styleProfile);
+                    }
+                    else if (dryRun)
+                    {
+                        conversionResult = materialConverter.DryRunConvert(sourceMaterial, styleProfile, materialOutputDirectory);
+                    }
+                    else
+                    {
+                        conversionResult = materialConverter.ConvertAndPersist(sourceMaterial, styleProfile, materialOutputDirectory);
+                    }
+
                     conversionCache[sourceMaterial] = conversionResult;
                 }
 
@@ -265,6 +328,9 @@ public class PrefabVariantBuilder
                     hasChanges = true;
                 }
 
+                if (inMemoryOnly)
+                    result.AddTemporaryMaterial(conversionResult.ConvertedMaterial);
+
                 result.AddReplacement(new PrefabMaterialReplacement(
                     rendererPath,
                     slotIndex,
@@ -276,6 +342,25 @@ public class PrefabVariantBuilder
             if (hasChanges)
                 renderer.sharedMaterials = slots;
         }
+    }
+
+    // Shared by conversion window preview to ensure temporary preview instances/components are not serialized.
+    internal static void ApplyHideFlagsRecursively(Transform root, HideFlags flags)
+    {
+        if (root == null)
+            return;
+
+        root.hideFlags = flags;
+        Component[] components = root.GetComponents<Component>();
+        for (int i = 0; i < components.Length; i++)
+        {
+            Component component = components[i];
+            if (component != null)
+                component.hideFlags = flags;
+        }
+
+        for (int i = 0; i < root.childCount; i++)
+            ApplyHideFlagsRecursively(root.GetChild(i), flags);
     }
 
     static string BuildSkipReason(ConversionResult conversionResult)
