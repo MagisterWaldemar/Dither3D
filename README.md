@@ -62,7 +62,7 @@ To apply dithering to a mesh or object:
 1. Select (or create) a material in the **Project** window.
 2. In the **Inspector**, click the **Shader** dropdown at the top of the material.
 3. Choose **Dither 3D → Opaque** (or whichever variant matches your use case).
-4. The material Inspector will now show the dither-specific properties (`Pattern`, `Dot Scale`, etc.).  
+4. The material Inspector will now show the dither-specific properties (`Pattern`, `Dot Scale`, etc.).
    The **Pattern** dropdown uses the `DitherPatternPropertyDrawer` editor extension, which automatically assigns the correct 3D dither texture and ramp texture for the chosen pattern size (`1×1`, `2×2`, `4×4`, or `8×8`).
 
 ### 3. Convert an existing material to use dithering
@@ -75,7 +75,7 @@ To switch an already-configured material (e.g., a Standard shader material) to d
 4. Adjust `Exposure` and `Offset` under **Dither Input Brightness** to match the previous brightness of the material.
 5. Select a **Pattern** size. Larger patterns (e.g. `8×8`) produce finer dot detail.
 
-> **Note:** There is no automated batch-conversion utility. Each material must be reassigned to a Dither 3D shader individually via the Inspector.
+> **Note:** There is no automated batch conversion utility. Each material must be reassigned to a Dither 3D shader individually via the Inspector.
 
 ### 4. Add the `Dither3DGlobalProperties` component
 
