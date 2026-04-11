@@ -326,7 +326,7 @@ public class Dither3DTextureMaker : MonoBehaviour
 
         Texture2D rankTexture = new Texture2D(size, size, TextureFormat.R8, false);
         rankTexture.SetPixels32(pixels);
-        rankTexture.Apply(false, true);
+        rankTexture.Apply(false, false);
 
         string path = $"{kTexturesPath}/{outputName}.png";
         File.WriteAllBytes(path, rankTexture.EncodeToPNG());
@@ -358,7 +358,7 @@ public class Dither3DTextureMaker : MonoBehaviour
 
             Texture2D tex = new Texture2D(size, size, TextureFormat.R8, false);
             tex.SetPixels32(pixels);
-            tex.Apply(false, true);
+            tex.Apply(false, false);
             string path = $"{kTexturesPath}/{outputPrefix}_{phase:00}.png";
             File.WriteAllBytes(path, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
@@ -429,7 +429,8 @@ public class Dither3DBlueNoiseGeneratorWindow : EditorWindow
 {
     string outputName = "Dither3D_BlueNoiseRank";
     int textureSize = 64;
-    int seed = 12345;
+    [SerializeField] bool seedInitialized;
+    [SerializeField] int seed;
     int candidateCount = 12;
 
     bool generatePhaseSet;
@@ -443,34 +444,43 @@ public class Dither3DBlueNoiseGeneratorWindow : EditorWindow
         window.Show();
     }
 
+    void OnEnable()
+    {
+        if (!seedInitialized)
+        {
+            seed = new System.Random().Next(int.MinValue, int.MaxValue);
+            seedInitialized = true;
+        }
+    }
+
     void OnGUI()
     {
         EditorGUILayout.LabelField("Blue Noise Fractal Texture Generator", EditorStyles.boldLabel);
         EditorGUILayout.Space();
 
-        outputName = EditorGUILayout.TextField("Rank Texture Name", outputName);
-        textureSize = EditorGUILayout.IntPopup("Size", textureSize, new[] { "32", "64", "128" }, new[] { 32, 64, 128 });
-        seed = EditorGUILayout.IntField("Seed", seed);
+        outputName = EditorGUILayout.TextField(new GUIContent("Rank Texture Name", "Filename for the generated rank texture saved in Assets/Dither3D."), outputName);
+        textureSize = EditorGUILayout.IntPopup(new GUIContent("Size", "Texture width/height in pixels. Larger sizes tile less obviously but take longer to generate."), textureSize, new[] { "32", "64", "128" }, new[] { 32, 64, 128 });
+        seed = EditorGUILayout.IntField(new GUIContent("Seed", "Random starting value for deterministic generation. A random seed is assigned once when this window is first opened."), seed);
         candidateCount = EditorGUILayout.IntSlider(
-            "Candidate Count",
+            new GUIContent("Candidate Count", "How many random candidates are tested per pixel step. Higher gives better blue-noise quality but slower generation."),
             candidateCount,
             Dither3DTextureMaker.kMinCandidateCount,
             Dither3DTextureMaker.kMaxCandidateCount);
 
         EditorGUILayout.Space();
-        generatePhaseSet = EditorGUILayout.Toggle("Generate Phase Set", generatePhaseSet);
+        generatePhaseSet = EditorGUILayout.Toggle(new GUIContent("Generate Phase Set", "Also generate additional phase textures for temporal decorrelation."), generatePhaseSet);
         using (new EditorGUI.DisabledScope(!generatePhaseSet))
         {
-            phasePrefix = EditorGUILayout.TextField("Phase Prefix", phasePrefix);
-            phaseCount = EditorGUILayout.IntSlider("Phase Count", phaseCount, 1, Dither3DTextureMaker.kMaxPhaseCount);
+            phasePrefix = EditorGUILayout.TextField(new GUIContent("Phase Prefix", "Base filename for generated phase textures."), phasePrefix);
+            phaseCount = EditorGUILayout.IntSlider(new GUIContent("Phase Count", "Number of phase textures to generate."), phaseCount, 1, Dither3DTextureMaker.kMaxPhaseCount);
         }
 
         EditorGUILayout.Space();
         EditorGUILayout.HelpBox(
-            "Generated textures are imported as linear, no mipmaps, uncompressed, repeat wrap, and point filter.",
+            "Tip: Candidate Count controls quality vs. speed. Seed controls variation while remaining deterministic. Generated textures are imported as linear, no mipmaps, uncompressed, repeat wrap, and point filter.",
             MessageType.Info);
 
-        if (GUILayout.Button("Generate Blue Noise Textures"))
+        if (GUILayout.Button(new GUIContent("Generate Blue Noise Textures", "Generate rank texture (and optional phase textures) using the current settings.")))
         {
             try
             {
