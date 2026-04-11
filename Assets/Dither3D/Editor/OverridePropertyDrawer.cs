@@ -9,13 +9,25 @@
 using UnityEngine;
 using UnityEditor;
 
-[CustomPropertyDrawer(typeof(OverridePropertyAttribute))]
+[CustomPropertyDrawer(typeof(PropertyAttribute), true)]
 public class OverridePropertyDrawer : PropertyDrawer
 {
     public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
     {
+        if (attribute == null || attribute.GetType().Name != "OverridePropertyAttribute")
+        {
+            EditorGUI.PropertyField(position, property, label, true);
+            return;
+        }
+
         SerializedProperty overrideProp =
             property.serializedObject.FindProperty(property.propertyPath + "Override");
+        if (overrideProp == null || overrideProp.propertyType != SerializedPropertyType.Boolean)
+        {
+            EditorGUI.PropertyField(position, property, label, true);
+            return;
+        }
+
         Rect posToggle = position;
         posToggle.width = 16;
         EditorGUI.PropertyField(posToggle, overrideProp, GUIContent.none);
