@@ -202,7 +202,7 @@ public class PrefabConversionWindow : EditorWindow
             manifest.summary.totalSkippedSlots += result.SkippedSlots.Count;
 
             AppendResultMessages(prefab.name, result, messages);
-            AppendManifestEntries(prefab, result, manifest);
+            AppendManifestEntries(prefab, result, manifest, manifest.generatedAtUtc);
         }
 
         manifest.summary.totalPrefabs = prefabs.Count;
@@ -230,9 +230,8 @@ public class PrefabConversionWindow : EditorWindow
         lastSummary = new RunSummary(prefabs.Count, successfulPrefabs, warningCount, errorCount, messages);
     }
 
-    void AppendManifestEntries(GameObject sourcePrefab, PrefabVariantBuildResult result, ConversionManifest manifest)
+    void AppendManifestEntries(GameObject sourcePrefab, PrefabVariantBuildResult result, ConversionManifest manifest, string entryTimestampUtc)
     {
-        string now = DateTime.UtcNow.ToString("o");
         string sourcePath = AssetDatabase.GetAssetPath(sourcePrefab);
         var prefabEntry = new ConversionManifestEntry();
         prefabEntry.entryType = "prefab";
@@ -240,7 +239,7 @@ public class PrefabConversionWindow : EditorWindow
         prefabEntry.output = result.VariantAssetPath;
         prefabEntry.adapterUsed = "StyleProfile:" + manifest.styleProfile;
         prefabEntry.context = sourcePrefab.name;
-        prefabEntry.timestampUtc = now;
+        prefabEntry.timestampUtc = entryTimestampUtc;
         prefabEntry.warnings.AddRange(result.Warnings);
         prefabEntry.errors.AddRange(result.Errors);
         manifest.entries.Add(prefabEntry);
@@ -254,7 +253,7 @@ public class PrefabConversionWindow : EditorWindow
             entry.output = replacement.ConvertedMaterialPath;
             entry.adapterUsed = string.IsNullOrEmpty(replacement.AdapterUsed) ? "N/A" : replacement.AdapterUsed;
             entry.context = sourcePath + "::" + replacement.RendererPath + " [slot " + replacement.SlotIndex + "]";
-            entry.timestampUtc = now;
+            entry.timestampUtc = entryTimestampUtc;
             manifest.entries.Add(entry);
         }
 
@@ -267,7 +266,7 @@ public class PrefabConversionWindow : EditorWindow
             entry.output = string.Empty;
             entry.adapterUsed = "N/A";
             entry.context = sourcePath + "::" + skip.RendererPath + " [slot " + skip.SlotIndex + "]";
-            entry.timestampUtc = now;
+            entry.timestampUtc = entryTimestampUtc;
             entry.warnings.Add(skip.Reason);
             manifest.entries.Add(entry);
         }
