@@ -83,6 +83,7 @@ public static class ShaderAdapterRegistryValidationUtility
 
     static void ValidatePropertyRules(ShaderAdapterMapping mapping, int mappingIndex, List<string> messages)
     {
+        var sourcePropertiesUsedInRules = new HashSet<string>(StringComparer.Ordinal);
         var propertyRules = mapping.PropertyRemapRules;
         for (int i = 0; i < propertyRules.Count; i++)
         {
@@ -105,6 +106,10 @@ public static class ShaderAdapterRegistryValidationUtility
                 messages.Add(
                     $"Mapping entry #{mappingIndex}, property rule #{i} has invalid source property name '{sourcePropertyName}'. Property names must start with '_' and use only letters, digits, or '_'.");
             }
+            else
+            {
+                sourcePropertiesUsedInRules.Add(sourcePropertyName);
+            }
 
             if (string.IsNullOrEmpty(targetPropertyName))
             {
@@ -114,6 +119,46 @@ public static class ShaderAdapterRegistryValidationUtility
             {
                 messages.Add(
                     $"Mapping entry #{mappingIndex}, property rule #{i} has invalid target property name '{targetPropertyName}'. Property names must start with '_' and use only letters, digits, or '_'.");
+            }
+        }
+
+        ValidatePropertyNameList(mapping.SupportedSourceProperties, "supported", mappingIndex, sourcePropertiesUsedInRules, messages);
+        ValidatePropertyNameList(mapping.UnsupportedSourceProperties, "unsupported", mappingIndex, sourcePropertiesUsedInRules, messages);
+    }
+
+    static void ValidatePropertyNameList(
+        IReadOnlyList<string> propertyNames,
+        string label,
+        int mappingIndex,
+        HashSet<string> sourcePropertiesUsedInRules,
+        List<string> messages)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < propertyNames.Count; i++)
+        {
+            string propertyName = (propertyNames[i] ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(propertyName))
+            {
+                messages.Add($"Mapping entry #{mappingIndex}, {label} property list item #{i} is empty.");
+                continue;
+            }
+
+            if (!IsValidPropertyName(propertyName))
+            {
+                messages.Add(
+                    $"Mapping entry #{mappingIndex}, {label} property list item #{i} has invalid property name '{propertyName}'. Property names must start with '_' and use only letters, digits, or '_'.");
+                continue;
+            }
+
+            if (!seen.Add(propertyName))
+            {
+                messages.Add($"Mapping entry #{mappingIndex}, {label} property list item #{i} duplicates '{propertyName}'.");
+            }
+
+            if (string.Equals(label, "supported", StringComparison.Ordinal) && !sourcePropertiesUsedInRules.Contains(propertyName))
+            {
+                messages.Add(
+                    $"Mapping entry #{mappingIndex}, supported property '{propertyName}' is not present in property remap rules.");
             }
         }
     }

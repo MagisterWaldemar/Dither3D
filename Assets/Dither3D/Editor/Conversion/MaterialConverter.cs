@@ -54,6 +54,7 @@ public class MaterialConverter
         result.ConvertedMaterial = targetMaterial;
 
         ApplyRules(sourceMaterial, targetMaterial, mapping, result);
+        WarnExplicitUnsupportedProperties(sourceMaterial.shader, mapping, result);
         WarnUnmappedSourceProperties(sourceMaterial.shader, mapping, result);
 
         return result;
@@ -379,6 +380,7 @@ public class MaterialConverter
     static void WarnUnmappedSourceProperties(Shader sourceShader, ShaderAdapterMapping mapping, ConversionResult result)
     {
         var mappedProperties = new HashSet<string>(StringComparer.Ordinal);
+        var explicitlyUnsupportedProperties = new HashSet<string>(StringComparer.Ordinal);
         IReadOnlyList<PropertyRemapRule> rules = mapping.PropertyRemapRules;
         for (int i = 0; i < rules.Count; i++)
         {
@@ -391,16 +393,55 @@ public class MaterialConverter
                 mappedProperties.Add(sourceProperty);
         }
 
+        IReadOnlyList<string> unsupportedProperties = mapping.UnsupportedSourceProperties;
+        for (int i = 0; i < unsupportedProperties.Count; i++)
+        {
+            string unsupportedProperty = (unsupportedProperties[i] ?? string.Empty).Trim();
+            if (!string.IsNullOrEmpty(unsupportedProperty))
+                explicitlyUnsupportedProperties.Add(unsupportedProperty);
+        }
+
         int propertyCount = ShaderUtil.GetPropertyCount(sourceShader);
         for (int i = 0; i < propertyCount; i++)
         {
             string sourcePropertyName = ShaderUtil.GetPropertyName(sourceShader, i);
-            if (!mappedProperties.Contains(sourcePropertyName))
+            if (!mappedProperties.Contains(sourcePropertyName) && !explicitlyUnsupportedProperties.Contains(sourcePropertyName))
             {
                 result.AddWarning(
                     "Unmapped source property '" + sourcePropertyName + "' was skipped (no implicit mapping is performed).");
             }
         }
+    }
+
+    static void WarnExplicitUnsupportedProperties(Shader sourceShader, ShaderAdapterMapping mapping, ConversionResult result)
+    {
+        IReadOnlyList<string> unsupportedProperties = mapping.UnsupportedSourceProperties;
+        for (int i = 0; i < unsupportedProperties.Count; i++)
+        {
+            string propertyName = (unsupportedProperties[i] ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(propertyName))
+                continue;
+
+            bool existsInSource = ShaderHasProperty(sourceShader, propertyName);
+            if (existsInSource)
+            {
+                result.AddWarning(
+                    "Explicitly unsupported source property '" + propertyName + "' was skipped by adapter '" +
+                    mapping.SourceShaderName + "'.");
+            }
+            else
+            {
+                result.AddWarning(
+                    "Adapter '" + mapping.SourceShaderName + "' lists unsupported property '" + propertyName +
+                    "', but the property was not found on the source shader.");
+            }
+        }
+    }
+
+    static bool ShaderHasProperty(Shader shader, string propertyName)
+    {
+        ShaderUtil.ShaderPropertyType ignored;
+        return TryGetShaderPropertyType(shader, propertyName, out ignored);
     }
 
     static bool TryGetShaderPropertyType(Shader shader, string propertyName, out ShaderUtil.ShaderPropertyType propertyType)

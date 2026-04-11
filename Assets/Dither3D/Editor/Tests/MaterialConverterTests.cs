@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEditor;
@@ -131,6 +132,66 @@ public class MaterialConverterTests
         Assert.That(string.IsNullOrEmpty(result.AdapterUsed), Is.False);
     }
 
+    [Test]
+    public void PrioritizedNonUrpAdapters_ConvertRepresentativeMaterial_AndReportUnsupportedFields()
+    {
+        string[] sourceShaderNames =
+        {
+            "Nature/SpeedTree",
+            "Nature/SpeedTree8",
+            "Dither 3D/Particles (Alpha Blended)"
+        };
+
+        DitherStyleProfile profile = CreateProfileWithPrioritizedNonUrpAdapters();
+        MaterialConverter converter = new MaterialConverter();
+
+        for (int i = 0; i < sourceShaderNames.Length; i++)
+        {
+            string shaderName = sourceShaderNames[i];
+            Material source = CreateSourceMaterial(shaderName);
+            if (source == null)
+                continue;
+
+            ConversionResult result = converter.Convert(source, profile);
+            Assert.That(result.Success, Is.True, "Expected conversion success for " + shaderName);
+            Assert.That(result.ConvertedMaterial, Is.Not.Null, "Expected converted material for " + shaderName);
+            Assert.That(result.Warnings.Count, Is.GreaterThan(0), "Expected warnings for partial mapping on " + shaderName);
+            Assert.That(ContainsWarningPrefix(result, "Explicitly unsupported source property"), Is.True, "Expected explicit unsupported warning for " + shaderName);
+        }
+    }
+
+    [Test]
+    public void PrioritizedNonUrpAdapters_DefinitionsOnlyMapVerifiedProperties()
+    {
+        ShaderAdapterRegistry registry = ShaderAdapterRegistry.CreatePrioritizedNonUrpRegistry();
+        Assert.That(registry, Is.Not.Null);
+        Assert.That(registry.ShaderMappings.Count, Is.GreaterThanOrEqualTo(3));
+
+        for (int i = 0; i < registry.ShaderMappings.Count; i++)
+        {
+            ShaderAdapterMapping mapping = registry.ShaderMappings[i];
+            Assert.That(mapping, Is.Not.Null);
+            Assert.That(mapping.TargetShader, Is.Not.Null, "Missing target shader for mapping " + mapping.SourceShaderName);
+            Assert.That(string.IsNullOrEmpty(mapping.AdapterDocumentation), Is.False, "Missing adapter documentation for " + mapping.SourceShaderName);
+            Assert.That(mapping.SupportedSourceProperties.Count, Is.GreaterThan(0), "Missing supported property documentation for " + mapping.SourceShaderName);
+            Assert.That(mapping.UnsupportedSourceProperties.Count, Is.GreaterThan(0), "Missing unsupported property documentation for " + mapping.SourceShaderName);
+
+            Shader sourceShader = Shader.Find(mapping.SourceShaderName);
+            if (sourceShader == null)
+                continue;
+
+            IReadOnlyList<PropertyRemapRule> rules = mapping.PropertyRemapRules;
+            for (int ruleIndex = 0; ruleIndex < rules.Count; ruleIndex++)
+            {
+                PropertyRemapRule rule = rules[ruleIndex];
+                Assert.That(sourceShader.HasProperty(rule.SourcePropertyName), Is.True,
+                    $"Source shader '{mapping.SourceShaderName}' is missing mapped source property '{rule.SourcePropertyName}'.");
+                Assert.That(mapping.TargetShader.HasProperty(rule.TargetPropertyName), Is.True,
+                    $"Target shader '{mapping.TargetShader.name}' is missing mapped target property '{rule.TargetPropertyName}'.");
+            }
+        }
+    }
+
     static bool ContainsWarningPrefix(ConversionResult result, string prefix)
     {
         for (int i = 0; i < result.Warnings.Count; i++)
@@ -144,8 +205,16 @@ public class MaterialConverterTests
 
     static Material CreateSourceMaterial()
     {
-        Shader sourceShader = Shader.Find("Standard");
-        Assert.That(sourceShader, Is.Not.Null, "Standard shader must exist.");
+        Material material = CreateSourceMaterial("Standard");
+        Assert.That(material, Is.Not.Null, "Standard shader must exist.");
+        return material;
+    }
+
+    static Material CreateSourceMaterial(string shaderName)
+    {
+        Shader sourceShader = Shader.Find(shaderName);
+        if (sourceShader == null)
+            return null;
         return new Material(sourceShader);
     }
 
@@ -168,6 +237,15 @@ public class MaterialConverterTests
 
         DitherStyleProfile profile = ScriptableObject.CreateInstance<DitherStyleProfile>();
         SetPrivateField(profile, "profileName", "TestStyle");
+        SetPrivateField(profile, "shaderAdapterRegistry", registry);
+        return profile;
+    }
+
+    static DitherStyleProfile CreateProfileWithPrioritizedNonUrpAdapters()
+    {
+        ShaderAdapterRegistry registry = ShaderAdapterRegistry.CreatePrioritizedNonUrpRegistry();
+        DitherStyleProfile profile = ScriptableObject.CreateInstance<DitherStyleProfile>();
+        SetPrivateField(profile, "profileName", "PrioritizedNonUrp");
         SetPrivateField(profile, "shaderAdapterRegistry", registry);
         return profile;
     }
