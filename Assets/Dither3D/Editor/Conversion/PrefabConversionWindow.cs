@@ -165,8 +165,9 @@ public class PrefabConversionWindow : EditorWindow
 
         var builder = new PrefabVariantBuilder();
         var manifest = new ConversionManifest();
+        DateTime runTimestampUtc = DateTime.UtcNow;
         manifest.dryRun = dryRun;
-        manifest.generatedAtUtc = DateTime.UtcNow.ToString("o");
+        manifest.generatedAtUtc = runTimestampUtc.ToString("o");
         manifest.styleProfile = effectiveProfile.name;
         manifest.styleProfileAssetPath = AssetDatabase.GetAssetPath(styleProfile);
         ShaderAdapterRegistry effectiveRegistry = effectiveProfile.ShaderAdapterRegistry;
@@ -219,7 +220,7 @@ public class PrefabConversionWindow : EditorWindow
                 folder = "Assets";
 
             EnsureFolderExists(folder);
-            string fileName = "ConversionManifest_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss") + ".json";
+            string fileName = "ConversionManifest_" + runTimestampUtc.ToString("yyyyMMdd_HHmmss") + ".json";
             lastManifestAssetPath = NormalizePath(Path.Combine(folder, fileName));
             File.WriteAllText(AssetPathToAbsolutePath(lastManifestAssetPath), lastManifestJson);
             AssetDatabase.ImportAsset(lastManifestAssetPath, ImportAssetOptions.ForceUpdate);
@@ -315,10 +316,10 @@ public class PrefabConversionWindow : EditorWindow
         if (styleProfile != null && adapterRegistry == null)
             return styleProfile;
 
-        string profileName = styleProfile != null ? styleProfile.ProfileName : "AdHocProfile";
+        string runtimeProfileName = styleProfile != null ? styleProfile.ProfileName : "AdHocProfile";
         string notes = styleProfile != null ? styleProfile.Notes : string.Empty;
-        DitherStyleProfile runtime = DitherStyleProfile.CreateRuntimeProfile(profileName, adapterRegistry, notes);
-        runtime.name = "Runtime_" + profileName;
+        DitherStyleProfile runtime = DitherStyleProfile.CreateRuntimeProfile(runtimeProfileName, adapterRegistry, notes);
+        runtime.name = "Runtime_" + runtimeProfileName;
         return runtime;
     }
 
