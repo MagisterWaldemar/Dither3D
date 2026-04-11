@@ -124,13 +124,18 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
     fixed3 clampMax = max(clampMin, saturate(_PointillismClampMaxColor.rgb));
     fixed3 clampRange = max(fixed3(MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE), clampMax - clampMin);
     fixed3 clamped = clamp(color, clampMin, clampMax);
-    fixed3 normalized = saturate((clamped - clampMin) / clampRange);
+    fixed3 luminanceWeights = fixed3(0.299, 0.587, 0.114);
+    fixed minLum = dot(clampMin, luminanceWeights);
+    fixed maxLum = dot(clampMax, luminanceWeights);
+    fixed lumRange = max(MIN_POINTILLISM_RANGE, dot(clampRange, luminanceWeights));
+    fixed inputLum = clamp(dot(clamped, luminanceWeights), minLum, maxLum);
+    fixed normalizedLum = saturate((inputLum - minLum) / lumRange);
 
     float steps = max(2.0, _PointillismColorSteps);
-    fixed3 scaled = normalized * (steps - 1.0);
-    fixed3 low = floor(scaled) / (steps - 1.0);
-    fixed3 high = ceil(scaled) / (steps - 1.0);
-    fixed3 fracPart = frac(scaled);
+    fixed scaledLum = normalizedLum * (steps - 1.0);
+    fixed lowLum = floor(scaledLum) / (steps - 1.0);
+    fixed highLum = ceil(scaledLum) / (steps - 1.0);
+    fixed fracLum = frac(scaledLum);
 
     float2 dominantDerivative = dot(dx, dx) > dot(dy, dy) ? dx : dy;
     float2 mainDir = dot(dominantDerivative, dominantDerivative) > MIN_CONTRAST_EPSILON ? normalize(dominantDerivative) : float2(1.0, 0.0);
@@ -141,8 +146,8 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
 
     float2 uvBase = frac(uvPointillism);
     fixed rank = SamplePointillismRank(frac(uvBase + orthoDir * spread));
-    fixed3 dithered = lerp(low, high, step(fixed3(rank, rank, rank), fracPart));
-    fixed3 remapped = saturate(clampMin + dithered * clampRange);
+    fixed ditheredLum = (rank <= fracLum) ? highLum : lowLum;
+    fixed3 remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, inputLum)), clampMin, clampMax);
 
     float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
     float lutBlend = saturate(_PointillismLUTBlend) * hasLut;
