@@ -230,7 +230,10 @@ If a blue-noise rank texture is missing, shaders safely fallback to the Bayer pa
 ## Pointillism setup
 
 1. Keep your existing material workflow unchanged (pointillism is opt-in and off by default).
-2. (Recommended) Assign a tileable `Blue Noise Rank Texture` and optional phase texture.
+2. Choose pointillism rank source behavior:
+   - `Pattern Source = Bayer` (default): pointillism uses a stable non-temporal Bayer-derived rank.
+   - `Pattern Source = BlueNoiseFractal` + `Blue Noise Rank Texture`: pointillism uses blue-noise temporal rank controls.
+   - If `BlueNoiseFractal` is selected but rank texture is missing, pointillism safely falls back to the stable Bayer-derived rank.
 3. Enable `Pointillism` on the material.
 4. Tune `Stroke Directionality`, `Stroke Length`, and `Color Steps`.
 5. Choose `Pointillism Coord Source`:
@@ -247,7 +250,7 @@ If a blue-noise rank texture is missing, shaders safely fallback to the Bayer pa
    - ObjectSpace source: orange (1.0, 0.4, 0.1)
    - TriplanarObjectSpace source: RGB = X/Y/Z blend weights
 
-Pointillism uses the same deterministic temporal phase/hysteresis controls as blue-noise fractal mode, so conservative/balanced temporal presets also apply to pointillism stability behavior.
+Pointillism uses the same deterministic temporal phase/hysteresis controls when blue-noise rank is active (`Pattern Source = BlueNoiseFractal` with rank texture assigned), so conservative/balanced temporal presets also apply in that mode.
 You can also use the dedicated pointillism preset override in `Dither3DGlobalProperties` to set stroke/palette/temporal as one grouped choice.
 
 ## Files
