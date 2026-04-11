@@ -326,7 +326,7 @@ public class Dither3DTextureMaker : MonoBehaviour
 
         Texture2D rankTexture = new Texture2D(size, size, TextureFormat.R8, false);
         rankTexture.SetPixels32(pixels);
-        rankTexture.Apply(false, true);
+        rankTexture.Apply(false, false);
 
         string path = $"{kTexturesPath}/{outputName}.png";
         File.WriteAllBytes(path, rankTexture.EncodeToPNG());
@@ -358,7 +358,7 @@ public class Dither3DTextureMaker : MonoBehaviour
 
             Texture2D tex = new Texture2D(size, size, TextureFormat.R8, false);
             tex.SetPixels32(pixels);
-            tex.Apply(false, true);
+            tex.Apply(false, false);
             string path = $"{kTexturesPath}/{outputPrefix}_{phase:00}.png";
             File.WriteAllBytes(path, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
