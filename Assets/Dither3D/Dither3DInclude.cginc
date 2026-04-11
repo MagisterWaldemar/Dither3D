@@ -147,8 +147,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
     float2 uvBase = frac(uvPointillism);
     fixed rank = SamplePointillismRank(frac(uvBase + orthoDir * spread));
     fixed ditheredLum = (rank <= fracLum) ? highLum : lowLum;
-    fixed origLum = dot(clamped, luminanceWeights);
-    fixed3 remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, origLum)), clampMin, clampMax);
+    fixed3 remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, inputLum)), clampMin, clampMax);
 
     float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
     float lutBlend = saturate(_PointillismLUTBlend) * hasLut;
