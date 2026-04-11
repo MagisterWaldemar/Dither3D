@@ -42,7 +42,10 @@ float _BlueNoiseMinDot;
 float _PointillismEnable;
 float _PointillismDirectionality;
 float _PointillismStrokeLength;
+float _PointillismBlueNoiseStrokeMix;
 float _PointillismColorSteps;
+float _PointillismPerceptualMode;
+float _PointillismHueSteps;
 float4 _PointillismClampMinColor;
 float4 _PointillismClampMaxColor;
 float _PointillismLUTBlend;
@@ -103,6 +106,10 @@ fixed SamplePointillismRank(float2 uvPointillism)
     return lerp(bayerRank, blueNoiseRank, useBlueNoiseRank);
 }
 
+fixed3 RGBtoHSL(fixed3 rgb);
+fixed HueToRGB(fixed p, fixed q, fixed t);
+fixed3 HSLtoRGB(fixed3 hsl);
+
 void SelectLowerMagnitudeDerivativeSet(float2 uvA, float2 uvB, out float2 dx, out float2 dy)
 {
     // Get the rates of change of two sets of UV coordinates and use the set with lower magnitude.
@@ -124,30 +131,59 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
     fixed3 clampMax = max(clampMin, saturate(_PointillismClampMaxColor.rgb));
     fixed3 clampRange = max(fixed3(MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE), clampMax - clampMin);
     fixed3 clamped = clamp(color, clampMin, clampMax);
-    fixed3 luminanceWeights = fixed3(0.299, 0.587, 0.114);
-    fixed minLum = dot(clampMin, luminanceWeights);
-    fixed maxLum = dot(clampMax, luminanceWeights);
-    fixed lumRange = max(MIN_POINTILLISM_RANGE, dot(clampRange, luminanceWeights));
-    fixed inputLum = clamp(dot(clamped, luminanceWeights), minLum, maxLum);
-    fixed normalizedLum = saturate((inputLum - minLum) / lumRange);
-
-    float steps = max(2.0, _PointillismColorSteps);
-    fixed scaledLum = normalizedLum * (steps - 1.0);
-    fixed lowLum = floor(scaledLum) / (steps - 1.0);
-    fixed highLum = ceil(scaledLum) / (steps - 1.0);
-    fixed fracLum = frac(scaledLum);
 
     float2 dominantDerivative = dot(dx, dx) > dot(dy, dy) ? dx : dy;
     float2 mainDir = dot(dominantDerivative, dominantDerivative) > MIN_CONTRAST_EPSILON ? normalize(dominantDerivative) : float2(1.0, 0.0);
     float2 orthoDir = float2(-mainDir.y, mainDir.x);
+    fixed blueAngleRaw = SampleTemporalRankWithFallback(frac(uvPointillism), 0.5);
+    float blueAngle = blueAngleRaw * 6.28318530718;
+    float2 blueDir = float2(cos(blueAngle), sin(blueAngle));
+    float2 blendedDir = normalize(lerp(orthoDir, blueDir, saturate(_PointillismBlueNoiseStrokeMix)));
     // Keep a small base spread so pointillism variation remains visible even with low stroke length.
     // The remaining spread range is controlled by stroke length for directional stroke tuning.
     float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
+    float derivMag = max(MIN_CONTRAST_EPSILON, length(dx) + length(dy));
+    float scaleAwareSpread = spread / max(MIN_CONTRAST_EPSILON, derivMag);
+    scaleAwareSpread = clamp(scaleAwareSpread, 0.01, 2.0);
 
     float2 uvBase = frac(uvPointillism);
-    fixed rank = SamplePointillismRank(frac(uvBase + orthoDir * spread));
-    fixed ditheredLum = (rank <= fracLum) ? highLum : lowLum;
-    fixed3 remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, inputLum)), clampMin, clampMax);
+    fixed rank = SamplePointillismRank(frac(uvBase + blendedDir * scaleAwareSpread * spread));
+    fixed3 remapped = clamped;
+
+    if (_PointillismPerceptualMode > 0.5)
+    {
+        fixed3 hsl = RGBtoHSL(clamped);
+        float hueSteps = max(2.0, _PointillismHueSteps);
+        fixed scaledHue = hsl.x * hueSteps;
+        fixed quantizedHue = floor(scaledHue + 0.5) / hueSteps;
+
+        float lumSteps = max(2.0, _PointillismColorSteps);
+        fixed scaledLum = hsl.z * (lumSteps - 1.0);
+        fixed lowLum = floor(scaledLum) / (lumSteps - 1.0);
+        fixed highLum = ceil(scaledLum) / (lumSteps - 1.0);
+        fixed fracLum = frac(scaledLum);
+        fixed ditheredLum = (rank <= fracLum) ? highLum : lowLum;
+
+        remapped = HSLtoRGB(fixed3(quantizedHue, hsl.y, ditheredLum));
+        remapped = clamp(remapped, clampMin, clampMax);
+    }
+    else
+    {
+        fixed3 luminanceWeights = fixed3(0.299, 0.587, 0.114);
+        fixed minLum = dot(clampMin, luminanceWeights);
+        fixed maxLum = dot(clampMax, luminanceWeights);
+        fixed lumRange = max(MIN_POINTILLISM_RANGE, dot(clampRange, luminanceWeights));
+        fixed inputLum = clamp(dot(clamped, luminanceWeights), minLum, maxLum);
+        fixed normalizedLum = saturate((inputLum - minLum) / lumRange);
+
+        float steps = max(2.0, _PointillismColorSteps);
+        fixed scaledLum = normalizedLum * (steps - 1.0);
+        fixed lowLum = floor(scaledLum) / (steps - 1.0);
+        fixed highLum = ceil(scaledLum) / (steps - 1.0);
+        fixed fracLum = frac(scaledLum);
+        fixed ditheredLum = (rank <= fracLum) ? highLum : lowLum;
+        remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, inputLum)), clampMin, clampMax);
+    }
 
     float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
     float lutBlend = saturate(_PointillismLUTBlend) * hasLut;
@@ -402,20 +438,19 @@ fixed4 GetDither3D_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy,
         fixed threshold = 1 - brightnessCurve;
     #endif
 
-    // Get the pattern value relative to the threshold, scale it
-    // according to the contrast, and add the base value.
-    fixed bwBayer = saturate((pattern - threshold) * contrast + baseVal);
-
     float blueNoiseBlendFactor = step(PATTERN_SOURCE_BLUENOISE_THRESHOLD, _DitherPatternSource) * step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
     float2 uvBlue = frac(uv);
     fixed rank = SampleTemporalRankWithFallback(uvBlue, 0.0);
+    // Center rank around zero so it can shift threshold up or down.
+    // Attenuate the shift for coarser fractal levels (larger spacing),
+    // so large dots do not get over-perturbed by the blue-noise rank.
+    fixed blueNoiseScaleFactor = saturate(1.0 / max(MIN_CONTRAST_EPSILON, spacing));
+    fixed blueNoiseOffset = (rank - 0.5) * blueNoiseBlendFactor * blueNoiseScaleFactor;
 
-    fixed blueThreshold = 1 - brightnessCurve;
-    // Scale contrast down as minimum-dot increases so tiny dots stay present longer.
-    fixed blueContrast = max(MIN_CONTRAST_EPSILON, contrast * (1.0 - saturate(_BlueNoiseMinDot) * MIN_DOT_CONTRAST_REDUCTION_FACTOR));
-    fixed bwBlueNoise = saturate((rank - blueThreshold) * blueContrast + baseVal);
-
-    fixed bw = lerp(bwBayer, bwBlueNoise, blueNoiseBlendFactor);
+    // Get the pattern value relative to the threshold (with optional
+    // blue-noise perturbation), scale it according to the contrast,
+    // and add the base value.
+    fixed bw = saturate((pattern - (threshold + blueNoiseOffset)) * contrast + baseVal);
 
     #if (INVERSE_DOTS)
         bw = 1.0 - bw;
@@ -473,6 +508,55 @@ fixed4 RGBtoCMYK(fixed3 rgb) {
         cmy.z = (1.0 - b - k) / invK;
     }
     return saturate(fixed4(cmy, k));
+}
+
+fixed3 RGBtoHSL(fixed3 rgb)
+{
+    fixed maxC = max(rgb.r, max(rgb.g, rgb.b));
+    fixed minC = min(rgb.r, min(rgb.g, rgb.b));
+    fixed l = (maxC + minC) * 0.5;
+    fixed d = maxC - minC;
+    fixed s = 0.0;
+    fixed h = 0.0;
+    if (d > MIN_POINTILLISM_RANGE)
+    {
+        s = (l > 0.5) ? d / max(MIN_POINTILLISM_RANGE, 2.0 - maxC - minC)
+                      : d / max(MIN_POINTILLISM_RANGE, maxC + minC);
+        if (maxC == rgb.r)
+            h = (rgb.g - rgb.b) / d + (rgb.g < rgb.b ? 6.0 : 0.0);
+        else if (maxC == rgb.g)
+            h = (rgb.b - rgb.r) / d + 2.0;
+        else
+            h = (rgb.r - rgb.g) / d + 4.0;
+        h /= 6.0;
+    }
+    return fixed3(h, s, l);
+}
+
+fixed HueToRGB(fixed p, fixed q, fixed t)
+{
+    if (t < 0.0) t += 1.0;
+    if (t > 1.0) t -= 1.0;
+    if (t < 1.0 / 6.0) return p + (q - p) * 6.0 * t;
+    if (t < 0.5) return q;
+    if (t < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - t) * 6.0;
+    return p;
+}
+
+fixed3 HSLtoRGB(fixed3 hsl)
+{
+    fixed h = hsl.x;
+    fixed s = hsl.y;
+    fixed l = hsl.z;
+    if (s < MIN_POINTILLISM_RANGE)
+        return fixed3(l, l, l);
+    fixed q = (l < 0.5) ? l * (1.0 + s) : l + s - l * s;
+    fixed p = 2.0 * l - q;
+    return fixed3(
+        HueToRGB(p, q, h + 1.0 / 3.0),
+        HueToRGB(p, q, h),
+        HueToRGB(p, q, h - 1.0 / 3.0)
+    );
 }
 
 float2 RotateUV(float2 uv, float2 xUnitDir)

@@ -26,6 +26,13 @@ Shader "Dither 3D/Particles (Additive)"
         _SizeVariability ("Dot Size Variability", Range(0,1)) = 0
         _Contrast ("Dot Contrast", Range(0,2)) = 1
         _StretchSmoothness ("Stretch Smoothness", Range(0,2)) = 1
+        [Space]
+        [Header(Pointillism (Optional))]
+        _PointillismStrokeLength ("Stroke Length", Range(0,1)) = 0.4
+        _PointillismBlueNoiseStrokeMix ("Blue Noise Stroke Mix", Range(0,1)) = 0.3
+        _PointillismColorSteps ("Color Steps", Range(2,32)) = 8
+        [Toggle] _PointillismPerceptualMode ("Perceptual HSL Mode", Float) = 0
+        _PointillismHueSteps ("Hue Steps", Range(2,24)) = 8
     }
     Category
     {
