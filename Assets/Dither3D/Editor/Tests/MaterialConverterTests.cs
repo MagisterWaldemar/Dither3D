@@ -193,12 +193,27 @@ public class MaterialConverterTests
             for (int ruleIndex = 0; ruleIndex < rules.Count; ruleIndex++)
             {
                 PropertyRemapRule rule = rules[ruleIndex];
-                Assert.That(sourceShader.HasProperty(rule.SourcePropertyName), Is.True,
+                Assert.That(ShaderHasProperty(sourceShader, rule.SourcePropertyName), Is.True,
                     $"Source shader '{mapping.SourceShaderName}' is missing mapped source property '{rule.SourcePropertyName}'.");
-                Assert.That(mapping.TargetShader.HasProperty(rule.TargetPropertyName), Is.True,
+                Assert.That(ShaderHasProperty(mapping.TargetShader, rule.TargetPropertyName), Is.True,
                     $"Target shader '{mapping.TargetShader.name}' is missing mapped target property '{rule.TargetPropertyName}'.");
             }
         }
+    }
+
+    static bool ShaderHasProperty(Shader shader, string propertyName)
+    {
+        if (shader == null || string.IsNullOrEmpty(propertyName))
+            return false;
+
+        int propertyCount = ShaderUtil.GetPropertyCount(shader);
+        for (int i = 0; i < propertyCount; i++)
+        {
+            if (ShaderUtil.GetPropertyName(shader, i) == propertyName)
+                return true;
+        }
+
+        return false;
     }
 
     static bool ContainsWarningPrefix(ConversionResult result, string prefix)
