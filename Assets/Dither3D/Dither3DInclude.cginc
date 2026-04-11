@@ -11,6 +11,20 @@ sampler2D _DitherRampTex;
 sampler2D _BlueNoiseRankTex;
 sampler2D _BlueNoisePhaseTex;
 sampler2D _PointillismLUTTex;
+
+#ifndef fixed
+#define fixed half
+#endif
+#ifndef fixed2
+#define fixed2 half2
+#endif
+#ifndef fixed3
+#define fixed3 half3
+#endif
+#ifndef fixed4
+#define fixed4 half4
+#endif
+
 float4 _DitherTex_TexelSize;
 float4 _BlueNoiseRankTex_TexelSize;
 float4 _BlueNoisePhaseTex_TexelSize;
