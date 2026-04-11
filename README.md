@@ -28,16 +28,10 @@ You can install this package directly from Git using Unity Package Manager.
 3. Paste the following URL and click **Add**:
 
 ```
-https://github.com/MagisterWaldemar/Dither3D.git
+https://github.com/MagisterWaldemar/Dither3D.git?path=/Assets/Dither3D
 ```
 
 Unity 2019.4 or later is required.
-
-If you're using an older cached URL or need the explicit path form, this also works:
-
-```
-https://github.com/MagisterWaldemar/Dither3D.git?path=/Assets/Dither3D
-```
 
 > **Note:** Git must be installed on your system. Download from [https://git-scm.com](https://git-scm.com) and restart Unity if needed.
 
