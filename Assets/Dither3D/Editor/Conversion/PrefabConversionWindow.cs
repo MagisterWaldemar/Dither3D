@@ -6,16 +6,46 @@ using UnityEngine;
 
 public class PrefabConversionWindow : EditorWindow
 {
+    const string UnmappedPropertyWarningToken = "Unmapped source property";
+    const float PreviewPrimaryLightIntensity = 1.2f;
+    const float PreviewSecondaryLightIntensity = 1f;
+    static readonly Vector3 PreviewPrimaryLightEuler = new Vector3(40f, 40f, 0f);
+    const float PreviewMinRadius = 0.5f;
+    const float PreviewDistanceMultiplier = 2.8f;
+    const float PreviewHeightOffsetMultiplier = 0.35f;
+    static readonly Color PreviewPanelBackgroundColor = new Color(0.11f, 0.11f, 0.11f, 1f);
+    static readonly Color PreviewCameraBackgroundColor = new Color(0.2f, 0.2f, 0.2f, 1f);
+
     [SerializeField] List<GameObject> selectedPrefabs = new List<GameObject>();
     [SerializeField] DitherStyleProfile styleProfile;
     [SerializeField] ShaderAdapterRegistry adapterRegistry;
     [SerializeField] string manifestOutputDirectory = "Assets/Dither3D/GeneratedConversionReports";
     [SerializeField] Vector2 prefabListScroll;
     [SerializeField] Vector2 detailsScroll;
+    [SerializeField] int previewPrefabIndex;
+    [SerializeField] PreviewDisplayMode previewDisplayMode = PreviewDisplayMode.SideBySide;
+    [SerializeField] bool autoRefreshPreview = true;
+    [SerializeField] Vector2 previewWarningScroll;
 
     RunSummary lastSummary;
     string lastManifestAssetPath;
     string lastManifestJson;
+    PreviewRenderUtility sourcePreviewUtility;
+    PreviewRenderUtility convertedPreviewUtility;
+    GameObject sourcePreviewInstance;
+    GameObject convertedPreviewInstance;
+    PrefabVariantBuildResult previewResult;
+    bool previewDirty = true;
+    string previewError;
+    Hash128 styleProfileDependencyHash;
+    Hash128 adapterRegistryDependencyHash;
+
+    enum PreviewDisplayMode
+    {
+        SideBySide,
+        SourceOnly,
+        ConvertedOnly
+    }
 
     [MenuItem("Tools/Dither 3D/Prefab Conversion")]
     static void OpenWindow()
@@ -33,11 +63,16 @@ public class PrefabConversionWindow : EditorWindow
         DrawSelectionSection();
         EditorGUILayout.Space();
 
+        EditorGUI.BeginChangeCheck();
         styleProfile = (DitherStyleProfile)EditorGUILayout.ObjectField("Style Profile", styleProfile, typeof(DitherStyleProfile), false);
         adapterRegistry = (ShaderAdapterRegistry)EditorGUILayout.ObjectField("Adapter Registry", adapterRegistry, typeof(ShaderAdapterRegistry), false);
         manifestOutputDirectory = EditorGUILayout.TextField(
             new GUIContent("Manifest Output", "Asset folder used to save conversion manifests on real convert."),
             manifestOutputDirectory);
+        if (EditorGUI.EndChangeCheck())
+            MarkPreviewDirty();
+
+        MonitorPreviewDependencyChanges();
 
         EditorGUILayout.Space();
         using (new EditorGUILayout.HorizontalScope())
@@ -50,7 +85,14 @@ public class PrefabConversionWindow : EditorWindow
         }
 
         EditorGUILayout.Space();
+        DrawPreviewPanel();
+        EditorGUILayout.Space();
         DrawSummaryPanel();
+    }
+
+    void OnDisable()
+    {
+        DisposePreviewResources();
     }
 
     void DrawSelectionSection()
@@ -62,7 +104,11 @@ public class PrefabConversionWindow : EditorWindow
                 AddSelectedPrefabs();
 
             if (GUILayout.Button("Clear"))
+            {
                 selectedPrefabs.Clear();
+                previewPrefabIndex = 0;
+                MarkPreviewDirty();
+            }
         }
 
         prefabListScroll = EditorGUILayout.BeginScrollView(prefabListScroll, GUILayout.Height(170f));
@@ -76,15 +122,21 @@ public class PrefabConversionWindow : EditorWindow
             {
                 using (new EditorGUILayout.HorizontalScope())
                 {
+                    EditorGUI.BeginChangeCheck();
                     selectedPrefabs[i] = (GameObject)EditorGUILayout.ObjectField(
                         "Prefab " + (i + 1),
                         selectedPrefabs[i],
                         typeof(GameObject),
                         false);
+                    if (EditorGUI.EndChangeCheck())
+                        MarkPreviewDirty();
 
                     if (GUILayout.Button("X", GUILayout.Width(24f)))
                     {
                         selectedPrefabs.RemoveAt(i);
+                        if (previewPrefabIndex >= selectedPrefabs.Count)
+                            previewPrefabIndex = Mathf.Max(0, selectedPrefabs.Count - 1);
+                        MarkPreviewDirty();
                         i--;
                     }
                 }
@@ -92,6 +144,83 @@ public class PrefabConversionWindow : EditorWindow
         }
 
         EditorGUILayout.EndScrollView();
+    }
+
+    void DrawPreviewPanel()
+    {
+        EditorGUILayout.LabelField("Prefab Preview", EditorStyles.boldLabel);
+
+        List<GameObject> prefabs = CollectPrefabInputs();
+        if (prefabs.Count == 0)
+        {
+            DisposePreviewResources();
+            EditorGUILayout.HelpBox("Select at least one prefab to enable side-by-side preview.", MessageType.Info);
+            return;
+        }
+
+        previewPrefabIndex = Mathf.Clamp(previewPrefabIndex, 0, prefabs.Count - 1);
+        EditorGUI.BeginChangeCheck();
+        string[] names = new string[prefabs.Count];
+        for (int i = 0; i < prefabs.Count; i++)
+            names[i] = prefabs[i] != null ? prefabs[i].name : "(Missing)";
+        previewPrefabIndex = EditorGUILayout.Popup("Preview Prefab", previewPrefabIndex, names);
+        previewDisplayMode = (PreviewDisplayMode)EditorGUILayout.EnumPopup("Display", previewDisplayMode);
+        autoRefreshPreview = EditorGUILayout.Toggle(new GUIContent("Auto Refresh", "Rebuild converted preview when profile/registry changes."), autoRefreshPreview);
+        if (EditorGUI.EndChangeCheck())
+            MarkPreviewDirty();
+
+        using (new EditorGUILayout.HorizontalScope())
+        {
+            if (GUILayout.Button("Refresh Preview", GUILayout.Width(140f)))
+                MarkPreviewDirty();
+        }
+
+        EnsurePreviewBuilt(prefabs[previewPrefabIndex]);
+
+        if (!string.IsNullOrEmpty(previewError))
+        {
+            EditorGUILayout.HelpBox(previewError, MessageType.Error);
+            return;
+        }
+
+        if (previewResult != null && previewResult.Warnings.Count > 0)
+        {
+            var unmappedWarnings = new List<string>();
+            for (int i = 0; i < previewResult.Warnings.Count; i++)
+            {
+                string warning = previewResult.Warnings[i];
+                if (!string.IsNullOrEmpty(warning) && warning.Contains(UnmappedPropertyWarningToken))
+                    unmappedWarnings.Add(warning);
+            }
+
+            if (unmappedWarnings.Count > 0)
+            {
+                EditorGUILayout.HelpBox(
+                    "Unmapped properties detected (" + unmappedWarnings.Count + "). Converted preview may differ from source where no remap rule exists.",
+                    MessageType.Warning);
+                previewWarningScroll = EditorGUILayout.BeginScrollView(previewWarningScroll, GUILayout.Height(70f));
+                for (int i = 0; i < unmappedWarnings.Count; i++)
+                    EditorGUILayout.LabelField("- " + unmappedWarnings[i], EditorStyles.wordWrappedMiniLabel);
+                EditorGUILayout.EndScrollView();
+            }
+        }
+
+        Rect previewRect = GUILayoutUtility.GetRect(10f, 210f, GUILayout.ExpandWidth(true));
+        if (previewDisplayMode == PreviewDisplayMode.SideBySide)
+        {
+            Rect left = new Rect(previewRect.x, previewRect.y, (previewRect.width - 6f) * 0.5f, previewRect.height);
+            Rect right = new Rect(left.xMax + 6f, previewRect.y, left.width, previewRect.height);
+            DrawPreviewCell(left, sourcePreviewUtility, sourcePreviewInstance, "Source");
+            DrawPreviewCell(right, convertedPreviewUtility, convertedPreviewInstance, "Converted");
+        }
+        else if (previewDisplayMode == PreviewDisplayMode.SourceOnly)
+        {
+            DrawPreviewCell(previewRect, sourcePreviewUtility, sourcePreviewInstance, "Source");
+        }
+        else
+        {
+            DrawPreviewCell(previewRect, convertedPreviewUtility, convertedPreviewInstance, "Converted");
+        }
     }
 
     void DrawSummaryPanel()
@@ -230,6 +359,72 @@ public class PrefabConversionWindow : EditorWindow
         lastSummary = new RunSummary(prefabs.Count, successfulPrefabs, warningCount, errorCount, messages);
     }
 
+    void EnsurePreviewBuilt(GameObject previewPrefab)
+    {
+        if (previewPrefab == null)
+        {
+            previewError = "Preview prefab is null.";
+            return;
+        }
+
+        if (!previewDirty)
+            return;
+
+        previewDirty = false;
+        previewError = string.Empty;
+        DisposePreviewResources();
+
+        DitherStyleProfile effectiveProfile = ResolveEffectiveProfile();
+        if (effectiveProfile == null)
+        {
+            previewError = "Preview unavailable: assign a Style Profile and/or Adapter Registry.";
+            return;
+        }
+
+        List<string> validationMessages = ShaderAdapterRegistryValidationUtility.Validate(effectiveProfile);
+        if (validationMessages.Count > 0)
+        {
+            previewError = "Preview unavailable: adapter validation failed. " + string.Join(" | ", validationMessages);
+            return;
+        }
+
+        try
+        {
+            var builder = new PrefabVariantBuilder();
+            previewResult = builder.BuildVariantPreview(previewPrefab, effectiveProfile, out convertedPreviewInstance);
+            if (previewResult == null || !previewResult.Success || convertedPreviewInstance == null)
+            {
+                previewError = BuildActionablePreviewErrorMessage(previewResult);
+                DisposePreviewResources();
+                return;
+            }
+
+            sourcePreviewInstance = PrefabUtility.InstantiatePrefab(previewPrefab) as GameObject;
+            if (sourcePreviewInstance == null)
+                sourcePreviewInstance = Instantiate(previewPrefab);
+
+            if (sourcePreviewInstance == null)
+            {
+                previewError = "Preview unavailable: failed to instantiate source prefab. Try reimporting the prefab and refresh preview.";
+                DisposePreviewResources();
+                return;
+            }
+
+            sourcePreviewInstance.hideFlags = HideFlags.HideAndDontSave;
+            PrefabVariantBuilder.ApplyHideFlagsRecursively(sourcePreviewInstance.transform, HideFlags.HideAndDontSave);
+            sourcePreviewUtility = new PreviewRenderUtility();
+            sourcePreviewUtility.AddSingleGO(sourcePreviewInstance);
+
+            convertedPreviewUtility = new PreviewRenderUtility();
+            convertedPreviewUtility.AddSingleGO(convertedPreviewInstance);
+        }
+        catch (Exception exception)
+        {
+            previewError = "Preview conversion failed: " + exception.Message + " (check adapter mappings and target shader properties, then click Refresh Preview).";
+            DisposePreviewResources();
+        }
+    }
+
     void AppendManifestEntries(GameObject sourcePrefab, PrefabVariantBuildResult result, ConversionManifest manifest, string entryTimestampUtc)
     {
         string sourcePath = AssetDatabase.GetAssetPath(sourcePrefab);
@@ -325,6 +520,7 @@ public class PrefabConversionWindow : EditorWindow
     void AddSelectedPrefabs()
     {
         UnityEngine.Object[] selected = Selection.GetFiltered(typeof(GameObject), SelectionMode.Assets);
+        bool changed = false;
         for (int i = 0; i < selected.Length; i++)
         {
             GameObject go = selected[i] as GameObject;
@@ -332,8 +528,14 @@ public class PrefabConversionWindow : EditorWindow
                 continue;
 
             if (!selectedPrefabs.Contains(go))
+            {
                 selectedPrefabs.Add(go);
+                changed = true;
+            }
         }
+
+        if (changed)
+            MarkPreviewDirty();
     }
 
     static void EnsureFolderExists(string folderPath)
@@ -372,6 +574,136 @@ public class PrefabConversionWindow : EditorWindow
 
         string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         return Path.Combine(projectRoot, assetPath);
+    }
+
+    void MonitorPreviewDependencyChanges()
+    {
+        Hash128 styleHash = ComputeAssetDependencyHash(styleProfile);
+        ShaderAdapterRegistry activeRegistry = adapterRegistry;
+        if (activeRegistry == null && styleProfile != null)
+            activeRegistry = styleProfile.ShaderAdapterRegistry;
+
+        Hash128 registryHash = ComputeAssetDependencyHash(activeRegistry);
+
+        if (styleHash != styleProfileDependencyHash || registryHash != adapterRegistryDependencyHash)
+        {
+            styleProfileDependencyHash = styleHash;
+            adapterRegistryDependencyHash = registryHash;
+            if (autoRefreshPreview)
+                MarkPreviewDirty();
+        }
+    }
+
+    static Hash128 ComputeAssetDependencyHash(UnityEngine.Object asset)
+    {
+        if (asset == null)
+            return default(Hash128);
+
+        string path = AssetDatabase.GetAssetPath(asset);
+        return string.IsNullOrEmpty(path) ? default(Hash128) : AssetDatabase.GetAssetDependencyHash(path);
+    }
+
+    void DrawPreviewCell(Rect rect, PreviewRenderUtility previewUtility, GameObject previewInstance, string label)
+    {
+        EditorGUI.DrawRect(rect, PreviewPanelBackgroundColor);
+        GUI.Label(new Rect(rect.x + 6f, rect.y + 4f, rect.width - 12f, 18f), label, EditorStyles.miniBoldLabel);
+
+        if (previewUtility == null || previewInstance == null)
+            return;
+
+        Rect renderRect = new Rect(rect.x + 2f, rect.y + 22f, rect.width - 4f, rect.height - 24f);
+        Bounds bounds = CalculateBounds(previewInstance);
+        Camera camera = previewUtility.camera;
+        camera.clearFlags = CameraClearFlags.Color;
+        camera.backgroundColor = PreviewCameraBackgroundColor;
+        ConfigurePreviewCamera(camera, bounds);
+
+        previewUtility.lights[0].intensity = PreviewPrimaryLightIntensity;
+        previewUtility.lights[0].transform.rotation = Quaternion.Euler(PreviewPrimaryLightEuler);
+        previewUtility.lights[1].intensity = PreviewSecondaryLightIntensity;
+
+        previewUtility.BeginPreview(renderRect, GUIStyle.none);
+        camera.Render();
+        Texture texture = previewUtility.EndPreview();
+        GUI.DrawTexture(renderRect, texture, ScaleMode.StretchToFill, false);
+    }
+
+    static void ConfigurePreviewCamera(Camera camera, Bounds bounds)
+    {
+        Vector3 center = bounds.center;
+        float radius = Mathf.Max(PreviewMinRadius, bounds.extents.magnitude);
+        float distance = radius * PreviewDistanceMultiplier;
+        camera.nearClipPlane = 0.01f;
+        camera.farClipPlane = 1000f;
+        camera.transform.position = center + new Vector3(0f, radius * PreviewHeightOffsetMultiplier, -distance);
+        camera.transform.LookAt(center);
+    }
+
+    static Bounds CalculateBounds(GameObject root)
+    {
+        Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+        if (renderers.Length == 0)
+            return new Bounds(root.transform.position, Vector3.one);
+
+        Bounds bounds = renderers[0].bounds;
+        for (int i = 1; i < renderers.Length; i++)
+            bounds.Encapsulate(renderers[i].bounds);
+        return bounds;
+    }
+
+    void MarkPreviewDirty()
+    {
+        previewDirty = true;
+    }
+
+    void DisposePreviewResources()
+    {
+        DisposePreviewUtility(ref sourcePreviewUtility);
+        DisposePreviewUtility(ref convertedPreviewUtility);
+        DisposePreviewObject(ref sourcePreviewInstance);
+        DisposePreviewObject(ref convertedPreviewInstance);
+
+        if (previewResult != null && previewResult.TemporaryMaterials.Count > 0)
+        {
+            for (int i = 0; i < previewResult.TemporaryMaterials.Count; i++)
+            {
+                Material material = previewResult.TemporaryMaterials[i];
+                if (material != null)
+                    DestroyImmediate(material);
+            }
+        }
+
+        previewResult = null;
+    }
+
+    static void DisposePreviewUtility(ref PreviewRenderUtility previewUtility)
+    {
+        if (previewUtility == null)
+            return;
+
+        previewUtility.Cleanup();
+        previewUtility = null;
+    }
+
+    static void DisposePreviewObject(ref GameObject instance)
+    {
+        if (instance == null)
+            return;
+
+        DestroyImmediate(instance);
+        instance = null;
+    }
+
+    static string BuildActionablePreviewErrorMessage(PrefabVariantBuildResult result)
+    {
+        if (result == null)
+            return "Preview conversion failed: no result returned. Verify style profile and adapter registry, then refresh preview.";
+
+        if (result.Errors.Count == 0)
+            return "Preview conversion failed without explicit errors. Verify shader adapter mappings and target shader property names, then refresh preview.";
+
+        return "Preview conversion failed: " + string.Join(" | ", result.Errors) +
+               " (Check that the source shader has a mapping in the active adapter registry and required target properties exist.)";
     }
 
     class RunSummary

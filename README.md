@@ -78,6 +78,7 @@ To switch an already-configured material (e.g., a Standard shader material) to d
 > **Batch prefab conversion:** Open **Tools → Dither 3D → Prefab Conversion** to run dry-run or real conversion on selected prefabs.  
 > - **Dry Run** computes deterministic output paths and a manifest preview with zero asset writes.  
 > - **Convert** writes generated converted materials, prefab variants, and a JSON conversion manifest report.
+> - **Prefab Preview panel** renders **Source vs Converted** side-by-side using in-memory conversion (no asset writes), includes a Source/Converted toggle, and surfaces unmapped-property warnings before committing conversion.
 
 > **Editor API note:** A deterministic editor-only `MaterialConverter` service is available for tool integrations. It converts one source material into a new dither material via `ShaderAdapterRegistry` + `DitherStyleProfile` rules, warns for unmapped properties, and does not guess implicit mappings.
 
@@ -317,6 +318,8 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 - Optional phase texture set is generated as separate textures and must be assigned manually.
 - Object/triplanar pointillism coordinates are currently available on opaque/cutout surface shaders; other shader paths may still rely on UV/AltUV behavior.
 - Pointillism LUT expects a simple horizontal 1D-style mapping texture and currently applies per-channel remapping only.
+- Prefab preview conversion only mirrors shader/material remaps; it does not execute runtime scene effects (post-processing, global runtime scripts, light baking, or animation state machines) in the preview panel.
+- Preview rendering in the conversion window is editor-camera based and may not exactly match Game view output across pipelines/settings; use it as a fast preflight check before final Convert.
 
 ## Next improvements
 
@@ -333,7 +336,7 @@ Current limitations:
 Future extension points:
 - Add additional rule kinds for richer type transforms and multi-property composition.
 - Add prefab/scene batch conversion orchestration on top of the service.
-- Add optional preview/inspection UI that consumes the deterministic conversion service.
+- Add richer preview inspection controls (for example diff overlays and renderer/slot filtering) on top of the current side-by-side preview.
 
 ## Discussion of surface-stable trait
 
