@@ -308,6 +308,8 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 | Stroke Length | 0.4 | Higher extends channel offsets |
 | Blue Noise Stroke Mix | 0.3 | Blend between geometric surface direction and blue-noise-derived direction for stroke variation. |
 | Color Steps | 8 | Lower = flatter posterization, higher = smoother |
+| Perceptual HSL Mode | Off | When On, quantizes hue separately from luminance |
+| Hue Steps | 8 | Number of hue palette slots used in Perceptual HSL Mode |
 | Pointillism Coord Source | UV | UV / AltUVHook / ObjectSpace / TriplanarObjectSpace |
 | Object Scale | 1.0 | Scales object-space coordinate density |
 | Triplanar Sharpness | 4.0 | Higher = harder blend transitions between planes |
@@ -316,11 +318,13 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 
 ## Pointillism grouped preset quick table
 
-| Preset | Stroke Directionality | Stroke Length | Blue Noise Stroke Mix | Color Steps | Clamp Range | Phase Speed / Hysteresis / Min Dot |
-|---|---:|---:|---:|---:|---|---|
-| Conservative | 0.35 | 0.25 | 0.15 | 6 | (0.05..0.95) | 0.08 / 0.90 / 0.18 |
-| Balanced | 0.50 | 0.40 | 0.30 | 8 | (0..1) | 0.15 / 0.80 / 0.12 |
-| Aggressive | 0.80 | 0.70 | 0.60 | 12 | (0..1) | 0.45 / 0.45 / 0.04 |
+| Preset | Stroke Directionality | Stroke Length | Blue Noise Stroke Mix | Color Steps | Perceptual HSL Mode | Hue Steps | Clamp Range | Phase Speed / Hysteresis / Min Dot |
+|---|---:|---:|---:|---:|---|---:|---|---|
+| Conservative | 0.35 | 0.25 | 0.15 | 6 | Off | 6 | (0.05..0.95) | 0.08 / 0.90 / 0.18 |
+| Balanced | 0.50 | 0.40 | 0.30 | 8 | Off | 8 | (0..1) | 0.15 / 0.80 / 0.12 |
+| Aggressive | 0.80 | 0.70 | 0.60 | 12 | Off | 12 | (0..1) | 0.45 / 0.45 / 0.04 |
+
+When **Perceptual HSL Mode** is enabled, hue is quantized into fixed palette slots while luminance is dithered separately, producing palette-limited output closer to pointillist painting techniques. In this mode, **Color Steps** controls luminance levels and **Hue Steps** controls hue palette size.
 
 ## Validation scenarios
 

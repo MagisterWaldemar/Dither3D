@@ -93,6 +93,12 @@ public class Dither3DGlobalProperties : MonoBehaviour
     [OverrideProperty] public float pointillismColorSteps = 8f;
     [HideInInspector] public bool pointillismColorStepsOverride;
 
+    [OverrideProperty] public bool pointillismPerceptualMode;
+    [HideInInspector] public bool pointillismPerceptualModeOverride;
+
+    [OverrideProperty] public float pointillismHueSteps = 8f;
+    [HideInInspector] public bool pointillismHueStepsOverride;
+
     [OverrideProperty] public float pointillismCoordSource;
     [HideInInspector] public bool pointillismCoordSourceOverride;
 
@@ -212,6 +218,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 out float presetStrokeLength,
                 out float presetBlueNoiseStrokeMix,
                 out float presetColorSteps,
+                out float presetPerceptualMode,
+                out float presetHueSteps,
                 out Color presetClampMin,
                 out Color presetClampMax,
                 out float presetPhaseSpeed,
@@ -221,6 +229,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_PointillismStrokeLength", presetStrokeLength, ref changed);
             SetShaderOverride("_PointillismBlueNoiseStrokeMix", presetBlueNoiseStrokeMix, ref changed);
             SetShaderOverride("_PointillismColorSteps", presetColorSteps, ref changed);
+            SetShaderOverride("_PointillismPerceptualMode", presetPerceptualMode, ref changed);
+            SetShaderOverride("_PointillismHueSteps", presetHueSteps, ref changed);
             SetShaderColorOverride("_PointillismClampMinColor", presetClampMin, ref changed);
             SetShaderColorOverride("_PointillismClampMaxColor", presetClampMax, ref changed);
             SetShaderOverride("_BlueNoisePhaseSpeed", presetPhaseSpeed, ref changed);
@@ -235,6 +245,10 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_PointillismBlueNoiseStrokeMix", pointillismBlueNoiseStrokeMix, ref changed);
         if (pointillismColorStepsOverride)
             SetShaderOverride("_PointillismColorSteps", pointillismColorSteps, ref changed);
+        if (pointillismPerceptualModeOverride)
+            SetShaderOverride("_PointillismPerceptualMode", pointillismPerceptualMode ? 1f : 0f, ref changed);
+        if (pointillismHueStepsOverride)
+            SetShaderOverride("_PointillismHueSteps", pointillismHueSteps, ref changed);
         if (pointillismCoordSourceOverride)
             SetShaderOverride("_PointillismCoordSource", pointillismCoordSource, ref changed);
         if (pointillismObjectScaleOverride)
@@ -325,6 +339,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
         out float strokeLength,
         out float blueNoiseStrokeMix,
         out float colorSteps,
+        out float perceptualMode,
+        out float hueSteps,
         out Color clampMin,
         out Color clampMax,
         out float phaseSpeed,
@@ -338,6 +354,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 strokeLength = 0.25f;
                 blueNoiseStrokeMix = 0.15f;
                 colorSteps = 6f;
+                perceptualMode = 0f;
+                hueSteps = 6f;
                 clampMin = new Color(0.05f, 0.05f, 0.05f, 1f);
                 clampMax = new Color(0.95f, 0.95f, 0.95f, 1f);
                 phaseSpeed = 0.08f;
@@ -349,6 +367,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 strokeLength = 0.70f;
                 blueNoiseStrokeMix = 0.60f;
                 colorSteps = 12f;
+                perceptualMode = 0f;
+                hueSteps = 12f;
                 clampMin = Color.black;
                 clampMax = Color.white;
                 phaseSpeed = 0.45f;
@@ -360,6 +380,8 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 strokeLength = 0.40f;
                 blueNoiseStrokeMix = 0.30f;
                 colorSteps = 8f;
+                perceptualMode = 0f;
+                hueSteps = 8f;
                 clampMin = Color.black;
                 clampMax = Color.white;
                 phaseSpeed = 0.15f;

@@ -30,6 +30,9 @@ Shader "Dither 3D/Particles (Additive)"
         [Header(Pointillism (Optional))]
         _PointillismStrokeLength ("Stroke Length", Range(0,1)) = 0.4
         _PointillismBlueNoiseStrokeMix ("Blue Noise Stroke Mix", Range(0,1)) = 0.3
+        _PointillismColorSteps ("Color Steps", Range(2,32)) = 8
+        [Toggle] _PointillismPerceptualMode ("Perceptual HSL Mode", Float) = 0
+        _PointillismHueSteps ("Hue Steps", Range(2,24)) = 8
     }
     Category
     {
