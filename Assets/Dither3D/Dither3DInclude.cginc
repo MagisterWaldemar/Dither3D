@@ -68,6 +68,7 @@ static const float MIN_CONTRAST_EPSILON = 0.0001;
 static const float MIN_DOT_CONTRAST_REDUCTION_FACTOR = 0.75;
 static const float MIN_VALID_TEXTURE_SIZE = 1.5;
 static const float MIN_POINTILLISM_RANGE = 0.0001;
+static const float PATTERN_SOURCE_BLUENOISE_THRESHOLD = 0.5;
 static const fixed3 POINTILLISM_SOURCE_VIS_UV = fixed3(0.1, 0.7, 1.0);
 static const fixed3 POINTILLISM_SOURCE_VIS_ALT_UV = fixed3(1.0, 0.85, 0.1);
 static const fixed3 POINTILLISM_SOURCE_VIS_OBJECT = fixed3(1.0, 0.4, 0.1);
@@ -89,6 +90,17 @@ fixed SampleTemporalRankWithFallback(float2 uvBlue, float phaseOffset)
 
     fixed hashRank = frac(sin(dot(uvBlue + phaseOffset, float2(12.9898, 78.233))) * 43758.5453);
     return lerp(hashRank, rank, hasRankTex);
+}
+
+fixed SamplePointillismRank(float2 uvPointillism)
+{
+    // Pointillism defaults to a stable Bayer-derived rank.
+    // Blue-noise temporal rank is only used when explicitly selected and a rank texture is available.
+    float2 uvRank = frac(uvPointillism);
+    float useBlueNoiseRank = step(PATTERN_SOURCE_BLUENOISE_THRESHOLD, _DitherPatternSource) * step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
+    fixed bayerRank = tex3D(_DitherTex, float3(uvRank, 0.5)).r;
+    fixed blueNoiseRank = SampleTemporalRankWithFallback(uvRank, 0.0);
+    return lerp(bayerRank, blueNoiseRank, useBlueNoiseRank);
 }
 
 void SelectLowerMagnitudeDerivativeSet(float2 uvA, float2 uvB, out float2 dx, out float2 dy)
@@ -128,7 +140,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
     float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
 
     float2 uvBase = frac(uvPointillism);
-    fixed rank = SampleTemporalRankWithFallback(frac(uvBase + orthoDir * spread), 0.0);
+    fixed rank = SamplePointillismRank(frac(uvBase + orthoDir * spread));
     fixed3 dithered = lerp(low, high, step(fixed3(rank, rank, rank), fracPart));
     fixed3 remapped = saturate(clampMin + dithered * clampRange);
 
@@ -389,7 +401,7 @@ fixed4 GetDither3D_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy,
     // according to the contrast, and add the base value.
     fixed bwBayer = saturate((pattern - threshold) * contrast + baseVal);
 
-    float blueNoiseBlendFactor = step(0.5, _DitherPatternSource) * step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
+    float blueNoiseBlendFactor = step(PATTERN_SOURCE_BLUENOISE_THRESHOLD, _DitherPatternSource) * step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
     float2 uvBlue = frac(uv);
     fixed rank = SampleTemporalRankWithFallback(uvBlue, 0.0);
 
@@ -499,6 +511,14 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 scree
             cmyk.z = GetDither3D_(RotateUV(uv_DitherTex, float2(1.000, 0.000)), screenPos, dx, dy, cmyk.z).x;
             cmyk.w = GetDither3D_(RotateUV(uv_DitherTex, float2(0.707, 0.707)), screenPos, dx, dy, cmyk.w).x;
             color.rgb = CMYKtoRGB(cmyk);
+        #else
+            // Fallback for pipelines or materials where no DITHERCOL_* keyword is enabled.
+            fixed4 dither = GetDither3D_(uv_DitherTex, screenPos, dx, dy, GetGrayscale(color));
+            color.rgb = dither.xxx;
+            #if (DEBUG_FRACTAL)
+                fixed3 uvVis = dither.yzw;
+                color.rgb = lerp(color.rgb, uvVis, 0.7);
+            #endif
         #endif
     }
 
