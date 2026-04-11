@@ -603,6 +603,7 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 scree
         #else
             // Fallback for pipelines or materials where no DITHERCOL_* keyword is enabled.
             // Preserve source color by default by dithering each RGB channel independently.
+            // Separate calls are required because each channel has different brightness thresholds.
             color.r = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.r).x;
             color.g = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.g).x;
             color.b = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.b).x;
