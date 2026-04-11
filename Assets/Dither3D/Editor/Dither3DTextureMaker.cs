@@ -32,7 +32,7 @@ public class Dither3DTextureMaker : MonoBehaviour
             return Application.dataPath;
 
         if (assetPath.StartsWith(kAssetsPrefix))
-            return Path.Combine(Application.dataPath, assetPath.Substring(kAssetsPrefix.Length));
+            return Path.Combine(Application.dataPath, assetPath.Remove(0, kAssetsPrefix.Length));
 
         string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         return Path.Combine(projectRoot, assetPath);
@@ -43,11 +43,15 @@ public class Dither3DTextureMaker : MonoBehaviour
         folderPath = NormalizeAssetPath(folderPath).TrimEnd('/');
         if (string.IsNullOrEmpty(folderPath) || folderPath == "Assets")
             return;
+        if (!folderPath.StartsWith("Assets"))
+            return;
 
         if (AssetDatabase.IsValidFolder(folderPath))
             return;
 
-        string parent = NormalizeAssetPath(Path.GetDirectoryName(folderPath) ?? "Assets");
+        string parent = NormalizeAssetPath(Path.GetDirectoryName(folderPath) ?? string.Empty);
+        if (string.IsNullOrEmpty(parent) || !parent.StartsWith("Assets"))
+            parent = "Assets";
         EnsureAssetFolderExists(parent);
         AssetDatabase.CreateFolder(parent, Path.GetFileName(folderPath));
     }
