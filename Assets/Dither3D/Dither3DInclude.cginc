@@ -402,20 +402,15 @@ fixed4 GetDither3D_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy,
         fixed threshold = 1 - brightnessCurve;
     #endif
 
-    // Get the pattern value relative to the threshold, scale it
-    // according to the contrast, and add the base value.
-    fixed bwBayer = saturate((pattern - threshold) * contrast + baseVal);
-
     float blueNoiseBlendFactor = step(PATTERN_SOURCE_BLUENOISE_THRESHOLD, _DitherPatternSource) * step(MIN_VALID_TEXTURE_SIZE, _BlueNoiseRankTex_TexelSize.z);
     float2 uvBlue = frac(uv);
     fixed rank = SampleTemporalRankWithFallback(uvBlue, 0.0);
+    fixed blueNoiseOffset = (rank - 0.5) * blueNoiseBlendFactor * saturate(1.0 / max(MIN_CONTRAST_EPSILON, spacing));
 
-    fixed blueThreshold = 1 - brightnessCurve;
-    // Scale contrast down as minimum-dot increases so tiny dots stay present longer.
-    fixed blueContrast = max(MIN_CONTRAST_EPSILON, contrast * (1.0 - saturate(_BlueNoiseMinDot) * MIN_DOT_CONTRAST_REDUCTION_FACTOR));
-    fixed bwBlueNoise = saturate((rank - blueThreshold) * blueContrast + baseVal);
-
-    fixed bw = lerp(bwBayer, bwBlueNoise, blueNoiseBlendFactor);
+    // Get the pattern value relative to the threshold (with optional
+    // blue-noise perturbation), scale it according to the contrast,
+    // and add the base value.
+    fixed bw = saturate((pattern - (threshold + blueNoiseOffset)) * contrast + baseVal);
 
     #if (INVERSE_DOTS)
         bw = 1.0 - bw;
