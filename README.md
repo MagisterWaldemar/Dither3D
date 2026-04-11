@@ -12,7 +12,7 @@ And here's a feature demo video (with music!) showing color RGB dithering, CMYK 
 
 [![Surface-Stable Fractal Dithering Demo video on YouTube](https://img.youtube.com/vi/EzjWBmhO_1E/0.jpg)](https://www.youtube.com/watch?v=EzjWBmhO_1E)
 
-This repository contains the shader and texture source files, and a Unity example project demonstrating their use. The example project is made with Unity 2019.4 and is also tested in Unity 2022.3 and Unity 6. It's based on the Forward rendering path in the Built-in Render Pipeline.
+This repository contains the shader and texture source files, and a Unity example project demonstrating their use. The example project is made with Unity 2019.4 and is also tested in Unity 2022.3 and Unity 6. The package includes Built-in RP shaders and a URP opaque shader variant.
 
 The core implementation is located in the folder `Assets/Dither3D`. The remaining files relate to the Unity example project.
 
@@ -53,6 +53,7 @@ Dither 3D provides the following ready-to-use shaders:
 | Shader | Intended use |
 |---|---|
 | `Dither 3D/Opaque` | Standard opaque surfaces |
+| `Dither 3D/URP/Opaque` | URP opaque surfaces (Lit-style inputs) |
 | `Dither 3D/Cutout` | Alpha-tested (cutout) surfaces |
 | `Dither 3D/Particle Add` | Additive particle effects |
 | `Dither 3D/Skybox` | Skybox rendering |
@@ -65,6 +66,13 @@ To apply dithering to a mesh or object:
 4. The material Inspector will now show the dither-specific properties (`Pattern`, `Dot Scale`, etc.).
    The **Pattern** dropdown uses the `DitherPatternPropertyDrawer` editor extension, which automatically assigns the correct 3D dither texture and ramp texture for the chosen pattern size (`1×1`, `2×2`, `4×4`, or `8×8`).
 
+### Pipeline support matrix
+
+| Source pipeline/material | Recommended dither shader |
+|---|---|
+| Built-in RP `Standard` | `Dither 3D/Opaque` |
+| URP `Universal Render Pipeline/Lit` | `Dither 3D/URP/Opaque` |
+
 ### 3. Convert an existing material to use dithering
 
 To switch an already-configured material (e.g., a Standard shader material) to dithering:
@@ -75,6 +83,8 @@ To switch an already-configured material (e.g., a Standard shader material) to d
 4. Adjust `Exposure` and `Offset` under **Dither Input Brightness** to match the previous brightness of the material.
 5. Select a **Pattern** size. Larger patterns (e.g. `8×8`) produce finer dot detail.
 
+URP migration (`Universal Render Pipeline/Lit` → `Dither 3D/URP/Opaque`) follows the same flow. Core target dither property names are (`_Color`, `_MainTex`, `_BumpMap`, `_EmissionMap`, `_EmissionColor`, `_Glossiness`, `_Metallic`), and the adapter maps URP Lit source properties (for example `_Smoothness`) to these targets.
+
 > **Batch prefab conversion:** Open **Tools → Dither 3D → Prefab Conversion** to run dry-run or real conversion on selected prefabs.  
 > - **Dry Run** computes deterministic output paths and a manifest preview with zero asset writes.  
 > - **Convert** writes generated converted materials, prefab variants, and a JSON conversion manifest report.
@@ -82,10 +92,15 @@ To switch an already-configured material (e.g., a Standard shader material) to d
 
 > **Editor API note:** A deterministic editor-only `MaterialConverter` service is available for tool integrations. It converts one source material into a new dither material via `ShaderAdapterRegistry` + `DitherStyleProfile` rules, warns for unmapped properties, and does not guess implicit mappings.
 
-> **Prioritized non-URP adapters:** Use `ShaderAdapterRegistry.CreatePrioritizedNonUrpRegistry()` to bootstrap explicit adapters for:
+> **Pipeline-aware adapter bootstrap:**  
+> - Use `ShaderAdapterRegistry.CreatePrioritizedRegistryForActivePipeline()` for active-pipeline defaults (URP projects prefer `Dither 3D/URP/Opaque`; non-URP behavior is unchanged).  
+> - Use `ShaderAdapterRegistry.CreatePrioritizedNonUrpRegistry()` to force Built-in-only mappings.
+>
+> Built-in-focused adapters include:
 > - `Nature/SpeedTree` → `Dither 3D/Cutout`
 > - `Nature/SpeedTree8` → `Dither 3D/Cutout`
 > - `Dither 3D/Particles (Alpha Blended)` → `Dither 3D/Particles (Additive)`
+> - URP adapter (pipeline-aware mode): `Universal Render Pipeline/Lit` → `Dither 3D/URP/Opaque` (falls back to `Dither 3D/Opaque` if URP shader is unavailable)
 >
 > The particle adapter intentionally prioritizes preserving dithered particle readability over blend-mode parity, so the alpha-blended source is mapped to the additive target by design.
 >
@@ -246,6 +261,7 @@ The central shader include file with the dithering implementation:
 Included shader files that use the dithering implementation:
 
 - `Dither3DOpaque.shader`
+- `Dither3DOpaqueURP.shader`
 - `Dither3DCutout.shader`
 - `Dither3DParticleAdd.shader`
 - `Dither3DSkybox.shader`
@@ -329,6 +345,10 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 - Pointillism LUT expects a simple horizontal 1D-style mapping texture and currently applies per-channel remapping only.
 - Prefab preview conversion only mirrors shader/material remaps; it does not execute runtime scene effects (post-processing, global runtime scripts, light baking, or animation state machines) in the preview panel.
 - Preview rendering in the conversion window is editor-camera based and may not exactly match Game view output across pipelines/settings; use it as a fast preflight check before final Convert.
+
+## Troubleshooting
+
+- **Material turns magenta:** This usually means a pipeline/shader mismatch (for example, using a Built-in shader in URP, or a URP shader without URP available). For URP projects use `Dither 3D/URP/Opaque`; for Built-in projects use `Dither 3D/Opaque`.
 
 ## Next improvements
 
