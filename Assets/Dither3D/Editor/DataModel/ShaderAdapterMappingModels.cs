@@ -21,10 +21,10 @@ public class PropertyRemapRule
     float scale = 1.0f;
 
     [SerializeField]
-    float bias;
+    float bias = 0.0f;
 
     [SerializeField]
-    float constantFallback;
+    float constantFallback = 0.0f;
 
     /// <summary>
     /// Source shader property name.
