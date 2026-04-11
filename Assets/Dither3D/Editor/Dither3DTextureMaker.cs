@@ -61,7 +61,6 @@ public class Dither3DTextureMaker : MonoBehaviour
             return;
 
         EnsureAssetFolderExists(folder);
-        Directory.CreateDirectory(AssetPathToAbsolutePath(folder));
     }
 
     static void WriteAllBytesToAssetPath(string assetPath, byte[] bytes)
