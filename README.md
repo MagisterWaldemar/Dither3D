@@ -19,6 +19,27 @@ The core implementation is located in the folder `Assets/Dither3D`. The remainin
 The original version of this repository can be found at:  
 [https://github.com/runevision/Dither3D](https://github.com/runevision/Dither3D)
 
+## Installation via Unity Package Manager
+
+You can install this package directly from Git using Unity Package Manager.
+
+1. Open **Unity Package Manager** (Window → Package Manager).
+2. Click the **+** button → **Add package from git URL…**
+3. Paste the following URL and click **Add**:
+
+```
+https://github.com/MagisterWaldemar/Dither3D.git?path=/Assets/Dither3D
+```
+
+The `?path=/Assets/Dither3D` suffix tells Unity where the `package.json` manifest lives inside the repository. Unity 2019.4 or later is required.
+
+> **Note:** Git must be installed on your system. Download from [https://git-scm.com](https://git-scm.com) and restart Unity if needed.
+
+To install a specific version tag (once tags are published), append `#<tag>`, e.g.:
+```
+https://github.com/MagisterWaldemar/Dither3D.git?path=/Assets/Dither3D#1.0.0
+```
+
 ## Dither Properties
 
 Each material that uses the dithering has the following dither-specific number properties:
