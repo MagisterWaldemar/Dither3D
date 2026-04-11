@@ -299,9 +299,11 @@ public class PrefabConversionWindow : EditorWindow
         manifest.generatedAtUtc = runTimestampUtc.ToString("o");
         manifest.styleProfile = effectiveProfile.name;
         manifest.styleProfileAssetPath = AssetDatabase.GetAssetPath(styleProfile);
+        manifest.styleProfileDependencyHash = ComputeAssetDependencyHash(styleProfile).ToString();
         ShaderAdapterRegistry effectiveRegistry = effectiveProfile.ShaderAdapterRegistry;
         manifest.adapterRegistry = effectiveRegistry != null ? effectiveRegistry.name : string.Empty;
         manifest.adapterRegistryAssetPath = AssetDatabase.GetAssetPath(effectiveRegistry);
+        manifest.adapterRegistryDependencyHash = ComputeAssetDependencyHash(effectiveRegistry).ToString();
 
         var messages = new List<string>();
         int successfulPrefabs = 0;

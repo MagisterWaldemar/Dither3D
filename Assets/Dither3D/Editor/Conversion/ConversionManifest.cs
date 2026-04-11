@@ -11,8 +11,10 @@ public class ConversionManifest
     public string generatedAtUtc;
     public string styleProfile;
     public string styleProfileAssetPath;
+    public string styleProfileDependencyHash;
     public string adapterRegistry;
     public string adapterRegistryAssetPath;
+    public string adapterRegistryDependencyHash;
     public ConversionManifestSummary summary = new ConversionManifestSummary();
     public List<ConversionManifestEntry> entries = new List<ConversionManifestEntry>();
 }
