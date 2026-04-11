@@ -42,6 +42,7 @@ float _BlueNoiseMinDot;
 float _PointillismEnable;
 float _PointillismDirectionality;
 float _PointillismStrokeLength;
+float _PointillismBlueNoiseStrokeMix;
 float _PointillismColorSteps;
 float4 _PointillismClampMinColor;
 float4 _PointillismClampMaxColor;
@@ -140,12 +141,19 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
     float2 dominantDerivative = dot(dx, dx) > dot(dy, dy) ? dx : dy;
     float2 mainDir = dot(dominantDerivative, dominantDerivative) > MIN_CONTRAST_EPSILON ? normalize(dominantDerivative) : float2(1.0, 0.0);
     float2 orthoDir = float2(-mainDir.y, mainDir.x);
+    fixed blueAngleRaw = SampleTemporalRankWithFallback(frac(uvPointillism), 0.5);
+    float blueAngle = blueAngleRaw * 6.28318530718;
+    float2 blueDir = float2(cos(blueAngle), sin(blueAngle));
+    float2 blendedDir = normalize(lerp(orthoDir, blueDir, saturate(_PointillismBlueNoiseStrokeMix)));
     // Keep a small base spread so pointillism variation remains visible even with low stroke length.
     // The remaining spread range is controlled by stroke length for directional stroke tuning.
     float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
+    float derivMag = max(MIN_CONTRAST_EPSILON, length(dx) + length(dy));
+    float scaleAwareSpread = spread / max(MIN_CONTRAST_EPSILON, derivMag);
+    scaleAwareSpread = clamp(scaleAwareSpread, 0.01, 2.0);
 
     float2 uvBase = frac(uvPointillism);
-    fixed rank = SamplePointillismRank(frac(uvBase + orthoDir * spread));
+    fixed rank = SamplePointillismRank(frac(uvBase + blendedDir * scaleAwareSpread * spread));
     fixed ditheredLum = (rank <= fracLum) ? highLum : lowLum;
     fixed3 remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, inputLum)), clampMin, clampMax);
 

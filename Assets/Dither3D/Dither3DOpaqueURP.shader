@@ -43,6 +43,7 @@ Shader "Dither 3D/URP/Opaque"
         [Toggle] _PointillismEnable ("Enable Pointillism", Float) = 0
         _PointillismDirectionality ("Stroke Directionality", Range(0,1)) = 0.5
         _PointillismStrokeLength ("Stroke Length", Range(0,1)) = 0.4
+        _PointillismBlueNoiseStrokeMix ("Blue Noise Stroke Mix", Range(0,1)) = 0.3
         _PointillismColorSteps ("Color Steps", Range(2,32)) = 8
         [Enum(UV,0,AltUVHook,1,ObjectSpace,2,TriplanarObjectSpace,3)] _PointillismCoordSource ("Pointillism Coord Source", Float) = 0
         _PointillismObjectScale ("Pointillism Object Scale", Range(0.1,32)) = 1

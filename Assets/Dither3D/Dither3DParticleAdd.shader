@@ -26,6 +26,10 @@ Shader "Dither 3D/Particles (Additive)"
         _SizeVariability ("Dot Size Variability", Range(0,1)) = 0
         _Contrast ("Dot Contrast", Range(0,2)) = 1
         _StretchSmoothness ("Stretch Smoothness", Range(0,2)) = 1
+        [Space]
+        [Header(Pointillism (Optional))]
+        _PointillismStrokeLength ("Stroke Length", Range(0,1)) = 0.4
+        _PointillismBlueNoiseStrokeMix ("Blue Noise Stroke Mix", Range(0,1)) = 0.3
     }
     Category
     {

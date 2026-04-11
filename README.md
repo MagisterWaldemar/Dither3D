@@ -306,6 +306,7 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 | Enable Pointillism | On (per material) | Off by default for backward compatibility |
 | Stroke Directionality | 0.5 | Higher increases directional "stroke" feel |
 | Stroke Length | 0.4 | Higher extends channel offsets |
+| Blue Noise Stroke Mix | 0.3 | Blend between geometric surface direction and blue-noise-derived direction for stroke variation. |
 | Color Steps | 8 | Lower = flatter posterization, higher = smoother |
 | Pointillism Coord Source | UV | UV / AltUVHook / ObjectSpace / TriplanarObjectSpace |
 | Object Scale | 1.0 | Scales object-space coordinate density |
@@ -315,11 +316,11 @@ Additional editor tooling for optional blue-noise rank/phase textures:
 
 ## Pointillism grouped preset quick table
 
-| Preset | Stroke Directionality | Stroke Length | Color Steps | Clamp Range | Phase Speed / Hysteresis / Min Dot |
-|---|---:|---:|---:|---|---|
-| Conservative | 0.35 | 0.25 | 6 | (0.05..0.95) | 0.08 / 0.90 / 0.18 |
-| Balanced | 0.50 | 0.40 | 8 | (0..1) | 0.15 / 0.80 / 0.12 |
-| Aggressive | 0.80 | 0.70 | 12 | (0..1) | 0.45 / 0.45 / 0.04 |
+| Preset | Stroke Directionality | Stroke Length | Blue Noise Stroke Mix | Color Steps | Clamp Range | Phase Speed / Hysteresis / Min Dot |
+|---|---:|---:|---:|---:|---|---|
+| Conservative | 0.35 | 0.25 | 0.15 | 6 | (0.05..0.95) | 0.08 / 0.90 / 0.18 |
+| Balanced | 0.50 | 0.40 | 0.30 | 8 | (0..1) | 0.15 / 0.80 / 0.12 |
+| Aggressive | 0.80 | 0.70 | 0.60 | 12 | (0..1) | 0.45 / 0.45 / 0.04 |
 
 ## Validation scenarios
 
