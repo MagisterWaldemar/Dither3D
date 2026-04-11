@@ -47,6 +47,8 @@ Shader "Dither 3D/Skybox (6 Sided)"
         _PointillismStrokeLength ("Stroke Length", Range(0,1)) = 0.4
         _PointillismBlueNoiseStrokeMix ("Blue Noise Stroke Mix", Range(0,1)) = 0.3
         _PointillismColorSteps ("Color Steps", Range(2,32)) = 8
+        [Enum(Legacy,0,OKLab,1)] _PointillismColorModel ("Pointillism Color Model", Float) = 1
+        _PointillismMaxChroma ("Pointillism Max Chroma (OKLab)", Range(0.05,0.6)) = 0.32
         [Toggle] _PointillismPerceptualMode ("Perceptual HSL Mode", Float) = 0
         _PointillismHueSteps ("Hue Steps", Range(2,24)) = 8
         [Enum(UV,0,AltUVHook,1,ObjectSpace,2,TriplanarObjectSpace,3)] _PointillismCoordSource ("Pointillism Coord Source", Float) = 1
