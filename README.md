@@ -77,6 +77,8 @@ To switch an already-configured material (e.g., a Standard shader material) to d
 
 > **Note:** There is no automated batch conversion utility. Each material must be reassigned to a Dither 3D shader individually via the Inspector.
 
+> **Editor API note:** A deterministic editor-only `MaterialConverter` service is available for tool integrations. It converts one source material into a new dither material via `ShaderAdapterRegistry` + `DitherStyleProfile` rules, warns for unmapped properties, and does not guess implicit mappings.
+
 ### 4. Add the `Dither3DGlobalProperties` component
 
 Global settings such as **Color Mode** (Grayscale / RGB / CMYK), **Inverse Dots**, and **Radial Compensation** are controlled via the `Dither3DGlobalProperties` component:
@@ -318,6 +320,18 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 
 - Add direct support for phase texture arrays/atlases.
 - Extend runtime visual debug overlays to include phase blend and hysteresis response.
+
+### Material converter limitations and extension points
+
+Current limitations:
+- Conversion is rule-driven and only applies explicitly configured source-to-target mappings.
+- Rule behavior currently focuses on direct copy, scale/bias, float constant fallback, and explicit skip-with-warning.
+- Conversion tooling is service-level only (no prefab-variant conversion workflow, no batch scene scanning UI).
+
+Future extension points:
+- Add additional rule kinds for richer type transforms and multi-property composition.
+- Add prefab/scene batch conversion orchestration on top of the service.
+- Add optional preview/inspection UI that consumes the deterministic conversion service.
 
 ## Discussion of surface-stable trait
 
