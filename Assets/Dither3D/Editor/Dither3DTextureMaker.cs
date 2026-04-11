@@ -19,6 +19,57 @@ public class Dither3DTextureMaker : MonoBehaviour
     internal const int kMaxPhaseCount = 16;
     internal const int kPhaseSeedMultiplier = 977;
 
+    static string NormalizeAssetPath(string path)
+    {
+        return path.Replace('\\', '/');
+    }
+
+    static string AssetPathToAbsolutePath(string assetPath)
+    {
+        assetPath = NormalizeAssetPath(assetPath);
+        if (assetPath == "Assets")
+            return Application.dataPath;
+
+        if (assetPath.StartsWith("Assets/"))
+            return Path.Combine(Application.dataPath, assetPath.Substring("Assets/".Length));
+
+        string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+        return Path.Combine(projectRoot, assetPath);
+    }
+
+    static void EnsureAssetFolderExists(string folderPath)
+    {
+        folderPath = NormalizeAssetPath(folderPath).TrimEnd('/');
+        if (string.IsNullOrEmpty(folderPath) || folderPath == "Assets")
+            return;
+
+        if (AssetDatabase.IsValidFolder(folderPath))
+            return;
+
+        string parent = NormalizeAssetPath(Path.GetDirectoryName(folderPath) ?? "Assets");
+        if (string.IsNullOrEmpty(parent))
+            parent = "Assets";
+
+        EnsureAssetFolderExists(parent);
+        AssetDatabase.CreateFolder(parent, Path.GetFileName(folderPath));
+    }
+
+    static void EnsureAssetParentFolderExists(string assetPath)
+    {
+        string folder = NormalizeAssetPath(Path.GetDirectoryName(assetPath) ?? string.Empty);
+        if (string.IsNullOrEmpty(folder))
+            return;
+
+        EnsureAssetFolderExists(folder);
+        Directory.CreateDirectory(AssetPathToAbsolutePath(folder));
+    }
+
+    static void WriteAllBytesToAssetPath(string assetPath, byte[] bytes)
+    {
+        EnsureAssetParentFolderExists(assetPath);
+        File.WriteAllBytes(AssetPathToAbsolutePath(assetPath), bytes);
+    }
+
     [MenuItem("Assets/Create/Dither 3D Texture/Bayer 1x1")]
     static void CreateDither3DTexture1x1()
     {
@@ -162,7 +213,9 @@ public class Dither3DTextureMaker : MonoBehaviour
         texture.SetPixels(colors);
         texture.Apply();
         string name = "Dither3D_" + dotsPerSide + "x" + dotsPerSide;
-        AssetDatabase.CreateAsset(texture, $"{kTexturesPath}/{name}.asset");
+        string texturePath = $"{kTexturesPath}/{name}.asset";
+        EnsureAssetParentFolderExists(texturePath);
+        AssetDatabase.CreateAsset(texture, texturePath);
 
         // Create 2D texture for inspection and debugging.
         // (Some versions of Unity can supposedly also create
@@ -173,7 +226,7 @@ public class Dither3DTextureMaker : MonoBehaviour
         tex.Apply();
         byte[] bytes = tex.EncodeToPNG();
         string debugPath = $"{kTexturesPath}/{name}.png";
-        File.WriteAllBytes(debugPath, bytes);
+        WriteAllBytesToAssetPath(debugPath, bytes);
         AssetDatabase.ImportAsset(debugPath, ImportAssetOptions.ForceUpdate);
 
         // Create ramp texture
@@ -193,7 +246,7 @@ public class Dither3DTextureMaker : MonoBehaviour
 
         byte[] bytes = tex.EncodeToPNG();
         string path = $"{kTexturesPath}/{name}.png";
-        System.IO.File.WriteAllBytes(path, bytes);
+        WriteAllBytesToAssetPath(path, bytes);
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
 
         TextureImporter importer = (TextureImporter)AssetImporter.GetAtPath(path);
@@ -329,7 +382,7 @@ public class Dither3DTextureMaker : MonoBehaviour
         rankTexture.Apply(false, false);
 
         string path = $"{kTexturesPath}/{outputName}.png";
-        File.WriteAllBytes(path, rankTexture.EncodeToPNG());
+        WriteAllBytesToAssetPath(path, rankTexture.EncodeToPNG());
         Object.DestroyImmediate(rankTexture);
         AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
         ConfigureBlueNoiseImport(path);
@@ -360,7 +413,7 @@ public class Dither3DTextureMaker : MonoBehaviour
             tex.SetPixels32(pixels);
             tex.Apply(false, false);
             string path = $"{kTexturesPath}/{outputPrefix}_{phase:00}.png";
-            File.WriteAllBytes(path, tex.EncodeToPNG());
+            WriteAllBytesToAssetPath(path, tex.EncodeToPNG());
             Object.DestroyImmediate(tex);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             ConfigureBlueNoiseImport(path);
