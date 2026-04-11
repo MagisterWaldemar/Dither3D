@@ -87,6 +87,8 @@ To switch an already-configured material (e.g., a Standard shader material) to d
 > - `Nature/SpeedTree8` → `Dither 3D/Cutout`
 > - `Dither 3D/Particles (Alpha Blended)` → `Dither 3D/Particles (Additive)`
 >
+> The particle adapter intentionally prioritizes preserving dithered particle readability over blend-mode parity, so the alpha-blended source is mapped to the additive target by design.
+>
 > Each adapter includes documented supported/unsupported source properties. Unsupported properties are logged explicitly during conversion, and only explicitly declared property remaps are applied.
 
 ### 4. Add the `Dither3DGlobalProperties` component

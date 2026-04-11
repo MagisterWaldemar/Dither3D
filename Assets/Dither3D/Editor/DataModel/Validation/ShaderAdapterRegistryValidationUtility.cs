@@ -6,6 +6,9 @@ using System.Collections.Generic;
 /// </summary>
 public static class ShaderAdapterRegistryValidationUtility
 {
+    const string SupportedLabel = "supported";
+    const string UnsupportedLabel = "unsupported";
+
     /// <summary>
     /// Validates a shader adapter registry and returns user-fixable messages.
     /// </summary>
@@ -122,8 +125,18 @@ public static class ShaderAdapterRegistryValidationUtility
             }
         }
 
-        ValidatePropertyNameList(mapping.SupportedSourceProperties, "supported", mappingIndex, sourcePropertiesUsedInRules, messages);
-        ValidatePropertyNameList(mapping.UnsupportedSourceProperties, "unsupported", mappingIndex, sourcePropertiesUsedInRules, messages);
+        ValidatePropertyNameList(mapping.SupportedSourceProperties, SupportedLabel, mappingIndex, sourcePropertiesUsedInRules, messages);
+        ValidatePropertyNameList(mapping.UnsupportedSourceProperties, UnsupportedLabel, mappingIndex, sourcePropertiesUsedInRules, messages);
+
+        var declaredSupported = new HashSet<string>(mapping.SupportedSourceProperties, StringComparer.Ordinal);
+        foreach (string propertyName in sourcePropertiesUsedInRules)
+        {
+            if (!declaredSupported.Contains(propertyName))
+            {
+                messages.Add(
+                    $"Mapping entry #{mappingIndex}, property rule source '{propertyName}' is not declared in the supported property list.");
+            }
+        }
     }
 
     static void ValidatePropertyNameList(
@@ -155,7 +168,7 @@ public static class ShaderAdapterRegistryValidationUtility
                 messages.Add($"Mapping entry #{mappingIndex}, {label} property list item #{i} duplicates '{propertyName}'.");
             }
 
-            if (string.Equals(label, "supported", StringComparison.Ordinal) && !sourcePropertiesUsedInRules.Contains(propertyName))
+            if (string.Equals(label, SupportedLabel, StringComparison.Ordinal) && !sourcePropertiesUsedInRules.Contains(propertyName))
             {
                 messages.Add(
                     $"Mapping entry #{mappingIndex}, supported property '{propertyName}' is not present in property remap rules.");

@@ -432,8 +432,8 @@ public class MaterialConverter
             else
             {
                 result.AddWarning(
-                    "Adapter '" + mapping.SourceShaderName + "' lists unsupported property '" + propertyName +
-                    "', but the property was not found on the source shader.");
+                    "Explicitly unsupported source property '" + propertyName +
+                    "' is not present on this source shader variant and remained unmapped.");
             }
         }
     }

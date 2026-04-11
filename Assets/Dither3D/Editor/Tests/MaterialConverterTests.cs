@@ -150,13 +150,22 @@ public class MaterialConverterTests
             string shaderName = sourceShaderNames[i];
             Material source = CreateSourceMaterial(shaderName);
             if (source == null)
-                continue;
+                Assert.Inconclusive("Expected source shader '" + shaderName + "' to exist for adapter coverage.");
 
             ConversionResult result = converter.Convert(source, profile);
             Assert.That(result.Success, Is.True, "Expected conversion success for " + shaderName);
             Assert.That(result.ConvertedMaterial, Is.Not.Null, "Expected converted material for " + shaderName);
             Assert.That(result.Warnings.Count, Is.GreaterThan(0), "Expected warnings for partial mapping on " + shaderName);
             Assert.That(ContainsWarningPrefix(result, "Explicitly unsupported source property"), Is.True, "Expected explicit unsupported warning for " + shaderName);
+
+            ShaderAdapterMapping mapping = FindMapping(profile.ShaderAdapterRegistry, shaderName);
+            Assert.That(mapping, Is.Not.Null, "Missing mapping for " + shaderName);
+            for (int unsupportedIndex = 0; unsupportedIndex < mapping.UnsupportedSourceProperties.Count; unsupportedIndex++)
+            {
+                string unsupportedProperty = mapping.UnsupportedSourceProperties[unsupportedIndex];
+                Assert.That(ContainsWarningText(result, unsupportedProperty), Is.True,
+                    $"Expected warning mentioning unsupported property '{unsupportedProperty}' for shader '{shaderName}'.");
+            }
         }
     }
 
@@ -178,7 +187,7 @@ public class MaterialConverterTests
 
             Shader sourceShader = Shader.Find(mapping.SourceShaderName);
             if (sourceShader == null)
-                continue;
+                Assert.Inconclusive("Expected source shader '" + mapping.SourceShaderName + "' to exist for mapping verification.");
 
             IReadOnlyList<PropertyRemapRule> rules = mapping.PropertyRemapRules;
             for (int ruleIndex = 0; ruleIndex < rules.Count; ruleIndex++)
@@ -201,6 +210,29 @@ public class MaterialConverterTests
         }
 
         return false;
+    }
+
+    static bool ContainsWarningText(ConversionResult result, string text)
+    {
+        for (int i = 0; i < result.Warnings.Count; i++)
+        {
+            if (result.Warnings[i].Contains(text))
+                return true;
+        }
+
+        return false;
+    }
+
+    static ShaderAdapterMapping FindMapping(ShaderAdapterRegistry registry, string sourceShaderName)
+    {
+        for (int i = 0; i < registry.ShaderMappings.Count; i++)
+        {
+            ShaderAdapterMapping mapping = registry.ShaderMappings[i];
+            if (mapping != null && mapping.SourceShaderName == sourceShaderName)
+                return mapping;
+        }
+
+        return null;
     }
 
     static Material CreateSourceMaterial()
