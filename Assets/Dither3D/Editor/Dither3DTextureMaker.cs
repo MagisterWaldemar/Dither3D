@@ -459,7 +459,11 @@ public class Dither3DBlueNoiseGeneratorWindow : EditorWindow
         EditorGUILayout.Space();
 
         outputName = EditorGUILayout.TextField(new GUIContent("Rank Texture Name", "Filename for the generated rank texture saved in Assets/Dither3D."), outputName);
-        textureSize = EditorGUILayout.IntPopup(new GUIContent("Size", "Texture width/height in pixels. Larger sizes tile less obviously but take longer to generate."), textureSize, new[] { "32", "64", "128" }, new[] { 32, 64, 128 });
+        textureSize = EditorGUILayout.IntPopup(
+            new GUIContent("Size", "Texture width/height in pixels. Larger sizes tile less obviously but take longer to generate."),
+            textureSize,
+            new[] { new GUIContent("32"), new GUIContent("64"), new GUIContent("128"), new GUIContent("256") },
+            new[] { 32, 64, 128, 256 });
         seed = EditorGUILayout.IntField(new GUIContent("Seed", "Random starting value for deterministic generation. A random seed is assigned once when this window is first opened."), seed);
         candidateCount = EditorGUILayout.IntSlider(
             new GUIContent("Candidate Count", "How many random candidates are tested per pixel step. Higher gives better blue-noise quality but slower generation."),
