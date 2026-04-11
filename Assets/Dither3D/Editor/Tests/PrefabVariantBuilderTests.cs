@@ -114,6 +114,42 @@ public class PrefabVariantBuilderTests
         }
     }
 
+    [Test]
+    public void BuildVariantDryRun_PerformsNoWritesAndReportsDeterministicOutputs()
+    {
+        CreateFolder(TempRoot);
+        Material source = CreateMaterialAsset(TempRoot + "/DryRun_Source.mat", "Standard");
+        string sourcePrefabPath = TempRoot + "/DryRun_Source.prefab";
+        CreateSourcePrefab(sourcePrefabPath, source, source, source);
+
+        DitherStyleProfile profile = CreateStyleProfile(CreateRule("_Color", "_Color", PropertyRemapRuleKind.DirectCopy));
+        string expectedVariantPath = PrefabVariantBuilder.BuildDeterministicVariantAssetPath(
+            TempVariantDirectory,
+            AssetDatabase.LoadAssetAtPath<GameObject>(sourcePrefabPath),
+            profile);
+
+        string[] guidsBefore = AssetDatabase.FindAssets(string.Empty, new[] { TempRoot });
+        PrefabVariantBuilder builder = new PrefabVariantBuilder();
+        PrefabVariantBuildResult result = builder.BuildVariantDryRun(sourcePrefabPath, profile, TempVariantDirectory, TempMaterialDirectory);
+        string[] guidsAfter = AssetDatabase.FindAssets(string.Empty, new[] { TempRoot });
+
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.VariantAssetPath, Is.EqualTo(expectedVariantPath));
+        Assert.That(result.Replacements.Count, Is.GreaterThan(0));
+        Assert.That(AssetDatabase.LoadAssetAtPath<GameObject>(result.VariantAssetPath), Is.Null);
+        Assert.That(AssetDatabase.IsValidFolder(TempVariantDirectory), Is.False);
+        Assert.That(AssetDatabase.IsValidFolder(TempMaterialDirectory), Is.False);
+        Assert.That(guidsAfter.Length, Is.EqualTo(guidsBefore.Length));
+
+        for (int i = 0; i < result.Replacements.Count; i++)
+        {
+            PrefabMaterialReplacement replacement = result.Replacements[i];
+            Assert.That(replacement.ConvertedMaterialPath.StartsWith(TempMaterialDirectory + "/"), Is.True);
+            Assert.That(AssetDatabase.LoadAssetAtPath<Material>(replacement.ConvertedMaterialPath), Is.Null);
+            Assert.That(string.IsNullOrEmpty(replacement.AdapterUsed), Is.False);
+        }
+    }
+
     static void AssertSourceMaterialsUnchanged(GameObject sourceContents, Material sourceA, Material sourceB, Material unsupported)
     {
         Renderer rendererA = sourceContents.transform.Find("RendererA").GetComponent<Renderer>();

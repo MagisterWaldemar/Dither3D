@@ -25,6 +25,11 @@ public class ConversionResult
     public string OutputAssetPath { get; internal set; }
 
     /// <summary>
+    /// Adapter mapping label used for conversion.
+    /// </summary>
+    public string AdapterUsed { get; internal set; }
+
+    /// <summary>
     /// Non-fatal warnings produced during conversion.
     /// </summary>
     public IReadOnlyList<string> Warnings => warnings;
