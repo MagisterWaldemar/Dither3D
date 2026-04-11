@@ -148,7 +148,7 @@ public class PrefabVariantBuilder
                 continue;
 
             bool hasChanges = false;
-            bool isImmutable = PrefabUtility.IsPartOfImmutablePrefab(renderer.gameObject);
+            bool isImmutable = PrefabUtility.IsPartOfModelPrefab(renderer.gameObject);
             for (int slotIndex = 0; slotIndex < slots.Length; slotIndex++)
             {
                 Material sourceMaterial = slots[slotIndex];
