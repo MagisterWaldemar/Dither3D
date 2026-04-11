@@ -602,12 +602,11 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 scree
             color.rgb = CMYKtoRGB(cmyk);
         #else
             // Fallback for pipelines or materials where no DITHERCOL_* keyword is enabled.
-            fixed4 dither = GetDither3D_(uv_DitherTex, screenPos, dx, dy, GetGrayscale(color));
-            color.rgb = dither.xxx;
-            #if (DEBUG_FRACTAL)
-                fixed3 uvVis = dither.yzw;
-                color.rgb = lerp(color.rgb, uvVis, 0.7);
-            #endif
+            // Preserve source color by default by dithering each RGB channel independently.
+            // Separate calls are required because each channel has different brightness thresholds.
+            color.r = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.r).x;
+            color.g = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.g).x;
+            color.b = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.b).x;
         #endif
     }
 
