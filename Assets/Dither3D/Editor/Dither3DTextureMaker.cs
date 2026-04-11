@@ -18,6 +18,7 @@ public class Dither3DTextureMaker : MonoBehaviour
     internal const int kMaxCandidateCount = 64;
     internal const int kMaxPhaseCount = 16;
     internal const int kPhaseSeedMultiplier = 977;
+    internal const string kAssetsPrefix = "Assets/";
 
     static string NormalizeAssetPath(string path)
     {
@@ -30,8 +31,8 @@ public class Dither3DTextureMaker : MonoBehaviour
         if (assetPath == "Assets")
             return Application.dataPath;
 
-        if (assetPath.StartsWith("Assets/"))
-            return Path.Combine(Application.dataPath, assetPath.Substring("Assets/".Length));
+        if (assetPath.StartsWith(kAssetsPrefix))
+            return Path.Combine(Application.dataPath, assetPath.Substring(kAssetsPrefix.Length));
 
         string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
         return Path.Combine(projectRoot, assetPath);
@@ -47,9 +48,6 @@ public class Dither3DTextureMaker : MonoBehaviour
             return;
 
         string parent = NormalizeAssetPath(Path.GetDirectoryName(folderPath) ?? "Assets");
-        if (string.IsNullOrEmpty(parent))
-            parent = "Assets";
-
         EnsureAssetFolderExists(parent);
         AssetDatabase.CreateFolder(parent, Path.GetFileName(folderPath));
     }
