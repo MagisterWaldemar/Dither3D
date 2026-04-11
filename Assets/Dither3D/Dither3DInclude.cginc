@@ -406,9 +406,9 @@ fixed4 GetDither3D_(float2 uv_DitherTex, float4 screenPos, float2 dx, float2 dy,
     float2 uvBlue = frac(uv);
     fixed rank = SampleTemporalRankWithFallback(uvBlue, 0.0);
     // Center rank around zero so it can shift threshold up or down.
-    // Scale shift down for larger spacing (coarser fractal levels).
-    fixed spacingInverseClamped = saturate(1.0 / max(MIN_CONTRAST_EPSILON, spacing));
-    fixed blueNoiseOffset = (rank - 0.5) * blueNoiseBlendFactor * spacingInverseClamped;
+    // Attenuate the shift for coarser fractal levels (larger spacing).
+    fixed blueNoiseScaleFactor = saturate(1.0 / max(MIN_CONTRAST_EPSILON, spacing));
+    fixed blueNoiseOffset = (rank - 0.5) * blueNoiseBlendFactor * blueNoiseScaleFactor;
 
     // Get the pattern value relative to the threshold (with optional
     // blue-noise perturbation), scale it according to the contrast,
