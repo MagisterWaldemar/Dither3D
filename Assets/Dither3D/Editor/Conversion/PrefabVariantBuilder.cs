@@ -148,7 +148,7 @@ public class PrefabVariantBuilder
                 continue;
 
             bool hasChanges = false;
-            bool isImmutable = PrefabUtility.IsPartOfModelPrefab(renderer.gameObject);
+            bool isPartOfModelPrefab = PrefabUtility.IsPartOfModelPrefab(renderer.gameObject);
             for (int slotIndex = 0; slotIndex < slots.Length; slotIndex++)
             {
                 Material sourceMaterial = slots[slotIndex];
@@ -158,7 +158,7 @@ public class PrefabVariantBuilder
                     continue;
                 }
 
-                if (isImmutable)
+                if (isPartOfModelPrefab)
                 {
                     result.AddSkippedSlot(new PrefabMaterialSkip(
                         rendererPath,
