@@ -6,6 +6,9 @@ using System.Collections.Generic;
 /// </summary>
 public static class ShaderAdapterRegistryValidationUtility
 {
+    const string SupportedLabel = "supported";
+    const string UnsupportedLabel = "unsupported";
+
     /// <summary>
     /// Validates a shader adapter registry and returns user-fixable messages.
     /// </summary>
@@ -83,6 +86,7 @@ public static class ShaderAdapterRegistryValidationUtility
 
     static void ValidatePropertyRules(ShaderAdapterMapping mapping, int mappingIndex, List<string> messages)
     {
+        var sourcePropertiesUsedInRules = new HashSet<string>(StringComparer.Ordinal);
         var propertyRules = mapping.PropertyRemapRules;
         for (int i = 0; i < propertyRules.Count; i++)
         {
@@ -105,6 +109,10 @@ public static class ShaderAdapterRegistryValidationUtility
                 messages.Add(
                     $"Mapping entry #{mappingIndex}, property rule #{i} has invalid source property name '{sourcePropertyName}'. Property names must start with '_' and use only letters, digits, or '_'.");
             }
+            else
+            {
+                sourcePropertiesUsedInRules.Add(sourcePropertyName);
+            }
 
             if (string.IsNullOrEmpty(targetPropertyName))
             {
@@ -114,6 +122,56 @@ public static class ShaderAdapterRegistryValidationUtility
             {
                 messages.Add(
                     $"Mapping entry #{mappingIndex}, property rule #{i} has invalid target property name '{targetPropertyName}'. Property names must start with '_' and use only letters, digits, or '_'.");
+            }
+        }
+
+        ValidatePropertyNameList(mapping.SupportedSourceProperties, SupportedLabel, mappingIndex, sourcePropertiesUsedInRules, messages);
+        ValidatePropertyNameList(mapping.UnsupportedSourceProperties, UnsupportedLabel, mappingIndex, sourcePropertiesUsedInRules, messages);
+
+        var declaredSupported = new HashSet<string>(mapping.SupportedSourceProperties, StringComparer.Ordinal);
+        foreach (string propertyName in sourcePropertiesUsedInRules)
+        {
+            if (!declaredSupported.Contains(propertyName))
+            {
+                messages.Add(
+                    $"Mapping entry #{mappingIndex}, property rule source '{propertyName}' is not declared in the supported property list.");
+            }
+        }
+    }
+
+    static void ValidatePropertyNameList(
+        IReadOnlyList<string> propertyNames,
+        string label,
+        int mappingIndex,
+        HashSet<string> sourcePropertiesUsedInRules,
+        List<string> messages)
+    {
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        for (int i = 0; i < propertyNames.Count; i++)
+        {
+            string propertyName = (propertyNames[i] ?? string.Empty).Trim();
+            if (string.IsNullOrEmpty(propertyName))
+            {
+                messages.Add($"Mapping entry #{mappingIndex}, {label} property list item #{i} is empty.");
+                continue;
+            }
+
+            if (!IsValidPropertyName(propertyName))
+            {
+                messages.Add(
+                    $"Mapping entry #{mappingIndex}, {label} property list item #{i} has invalid property name '{propertyName}'. Property names must start with '_' and use only letters, digits, or '_'.");
+                continue;
+            }
+
+            if (!seen.Add(propertyName))
+            {
+                messages.Add($"Mapping entry #{mappingIndex}, {label} property list item #{i} duplicates '{propertyName}'.");
+            }
+
+            if (string.Equals(label, SupportedLabel, StringComparison.Ordinal) && !sourcePropertiesUsedInRules.Contains(propertyName))
+            {
+                messages.Add(
+                    $"Mapping entry #{mappingIndex}, supported property '{propertyName}' is not present in property remap rules.");
             }
         }
     }

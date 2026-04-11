@@ -82,6 +82,15 @@ To switch an already-configured material (e.g., a Standard shader material) to d
 
 > **Editor API note:** A deterministic editor-only `MaterialConverter` service is available for tool integrations. It converts one source material into a new dither material via `ShaderAdapterRegistry` + `DitherStyleProfile` rules, warns for unmapped properties, and does not guess implicit mappings.
 
+> **Prioritized non-URP adapters:** Use `ShaderAdapterRegistry.CreatePrioritizedNonUrpRegistry()` to bootstrap explicit adapters for:
+> - `Nature/SpeedTree` → `Dither 3D/Cutout`
+> - `Nature/SpeedTree8` → `Dither 3D/Cutout`
+> - `Dither 3D/Particles (Alpha Blended)` → `Dither 3D/Particles (Additive)`
+>
+> The particle adapter intentionally prioritizes preserving dithered particle readability over blend-mode parity, so the alpha-blended source is mapped to the additive target by design.
+>
+> Each adapter includes documented supported/unsupported source properties. Unsupported properties are logged explicitly during conversion, and only explicitly declared property remaps are applied.
+
 ### 4. Add the `Dither3DGlobalProperties` component
 
 Global settings such as **Color Mode** (Grayscale / RGB / CMYK), **Inverse Dots**, and **Radial Compensation** are controlled via the `Dither3DGlobalProperties` component:
