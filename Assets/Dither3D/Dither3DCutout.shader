@@ -85,6 +85,7 @@ Shader "Dither 3D/Cutout"
             float4 screenPos;
             float3 worldPos;
             float3 worldNormal;
+            INTERNAL_DATA
             UNITY_FOG_COORDS(4)
         };
 
