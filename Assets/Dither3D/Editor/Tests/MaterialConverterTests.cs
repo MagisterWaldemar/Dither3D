@@ -201,6 +201,72 @@ public class MaterialConverterTests
         }
     }
 
+    [Test]
+    public void UrpOpaqueShader_Resolves_WhenUrpLitShaderIsAvailable()
+    {
+        Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
+        if (urpLit == null)
+            Assert.Inconclusive("URP Lit shader is not available in this test environment.");
+
+        Shader urpOpaque = Shader.Find("Dither 3D/URP/Opaque");
+        Assert.That(urpOpaque, Is.Not.Null, "Dither 3D/URP/Opaque shader must resolve in URP projects.");
+    }
+
+    [Test]
+    public void PrioritizedRegistry_WithUrpPreference_ConvertsUrpLitToPreferredOpaqueTarget()
+    {
+        Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
+        if (urpLit == null)
+            Assert.Inconclusive("URP Lit shader is not available in this test environment.");
+
+        Material source = CreateSourceMaterial("Universal Render Pipeline/Lit");
+        Assert.That(source, Is.Not.Null, "URP Lit shader must be available.");
+        source.SetColor("_BaseColor", new Color(0.3f, 0.4f, 0.5f, 1f));
+
+        ShaderAdapterRegistry registry = ShaderAdapterRegistry.CreatePrioritizedRegistry(true);
+        DitherStyleProfile profile = CreateStyleProfile(registry, "UrpPreferred");
+        MaterialConverter converter = new MaterialConverter();
+        ConversionResult result = converter.Convert(source, profile);
+
+        Shader preferredUrpTarget = Shader.Find("Dither 3D/URP/Opaque");
+        Shader fallbackTarget = Shader.Find("Dither 3D/Opaque");
+        Shader expectedTarget = preferredUrpTarget != null ? preferredUrpTarget : fallbackTarget;
+
+        Assert.That(expectedTarget, Is.Not.Null, "Expected at least one opaque dither target shader.");
+        Assert.That(result.Success, Is.True);
+        Assert.That(result.ConvertedMaterial, Is.Not.Null);
+        Assert.That(result.ConvertedMaterial.shader, Is.EqualTo(expectedTarget));
+        Assert.That(result.ConvertedMaterial.GetColor("_Color"), Is.EqualTo(source.GetColor("_BaseColor")));
+    }
+
+    [Test]
+    public void PrioritizedRegistry_WithoutUrpPreference_DoesNotAddUrpLitMapping()
+    {
+        ShaderAdapterRegistry registry = ShaderAdapterRegistry.CreatePrioritizedRegistry(false);
+        ShaderAdapterMapping mapping = FindMapping(registry, "Universal Render Pipeline/Lit");
+        Assert.That(mapping, Is.Null);
+    }
+
+    [Test]
+    public void PrioritizedRegistry_WithUrpPreference_FallsBackToBuiltInTarget_WhenUrpTargetIsUnavailable()
+    {
+        Shader urpLit = Shader.Find("Universal Render Pipeline/Lit");
+        if (urpLit == null)
+            Assert.Inconclusive("URP Lit shader is not available in this test environment.");
+
+        Shader urpTarget = Shader.Find("Dither 3D/URP/Opaque");
+        if (urpTarget != null)
+            Assert.Inconclusive("URP target shader is available; fallback path is not applicable in this environment.");
+
+        Shader fallbackTarget = Shader.Find("Dither 3D/Opaque");
+        Assert.That(fallbackTarget, Is.Not.Null);
+
+        ShaderAdapterRegistry registry = ShaderAdapterRegistry.CreatePrioritizedRegistry(true);
+        ShaderAdapterMapping mapping = FindMapping(registry, "Universal Render Pipeline/Lit");
+        Assert.That(mapping, Is.Not.Null);
+        Assert.That(mapping.TargetShader, Is.EqualTo(fallbackTarget));
+    }
+
     static bool ShaderHasProperty(Shader shader, string propertyName)
     {
         if (shader == null || string.IsNullOrEmpty(propertyName))
@@ -281,9 +347,13 @@ public class MaterialConverterTests
 
         ShaderAdapterRegistry registry = ScriptableObject.CreateInstance<ShaderAdapterRegistry>();
         SetPrivateField(registry, "shaderMappings", new System.Collections.Generic.List<ShaderAdapterMapping> { mapping });
+        return CreateStyleProfile(registry, "TestStyle");
+    }
 
+    static DitherStyleProfile CreateStyleProfile(ShaderAdapterRegistry registry, string profileName)
+    {
         DitherStyleProfile profile = ScriptableObject.CreateInstance<DitherStyleProfile>();
-        SetPrivateField(profile, "profileName", "TestStyle");
+        SetPrivateField(profile, "profileName", profileName);
         SetPrivateField(profile, "shaderAdapterRegistry", registry);
         return profile;
     }
