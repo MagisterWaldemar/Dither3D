@@ -128,14 +128,8 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, fixed3 
     float spread = saturate(_PointillismDirectionality) * (0.15 + 0.85 * saturate(_PointillismStrokeLength));
 
     float2 uvBase = frac(uvPointillism);
-    // Phase offsets are deliberately non-harmonic to decorrelate per-channel rank samples.
-    fixed3 ranks = fixed3(
-        SampleTemporalRankWithFallback(frac(uvBase + orthoDir * spread), 0.0),
-        SampleTemporalRankWithFallback(frac(uvBase - orthoDir * spread), 0.37),
-        SampleTemporalRankWithFallback(frac(uvBase + mainDir * spread * 0.6), 0.73)
-    );
-
-    fixed3 dithered = lerp(low, high, step(ranks, fracPart));
+    fixed rank = SampleTemporalRankWithFallback(frac(uvBase + orthoDir * spread), 0.0);
+    fixed3 dithered = lerp(low, high, step(fixed3(rank, rank, rank), fracPart));
     fixed3 remapped = saturate(clampMin + dithered * clampRange);
 
     float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
@@ -473,27 +467,6 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 scree
 {
     // Adjust brightness according to shader exposure and offset properties.
     color.rgb = saturate(color.rgb * _InputExposure + _InputOffset);
-    
-    #ifdef DITHERCOL_GRAYSCALE
-        fixed4 dither = GetDither3D_(uv_DitherTex, screenPos, dx, dy, GetGrayscale(color));
-        color.rgb = dither.x;
-        #if (DEBUG_FRACTAL)
-            fixed3 uvVis = dither.yzw;
-            color.rgb = lerp(color.rgb, uvVis, 0.7);
-        #endif
-    #elif DITHERCOL_RGB
-        color.r = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.r).x;
-        color.g = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.g).x;
-        color.b = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.b).x;
-    #elif DITHERCOL_CMYK
-        fixed4 cmyk = RGBtoCMYK(color.rgb);
-        // Get dither pattern for C, M, Y, K and angles 15, 75, 0, 45.
-        cmyk.x = GetDither3D_(RotateUV(uv_DitherTex, float2(0.966, 0.259)), screenPos, dx, dy, cmyk.x).x;
-        cmyk.y = GetDither3D_(RotateUV(uv_DitherTex, float2(0.259, 0.966)), screenPos, dx, dy, cmyk.y).x;
-        cmyk.z = GetDither3D_(RotateUV(uv_DitherTex, float2(1.000, 0.000)), screenPos, dx, dy, cmyk.z).x;
-        cmyk.w = GetDither3D_(RotateUV(uv_DitherTex, float2(0.707, 0.707)), screenPos, dx, dy, cmyk.w).x;
-        color.rgb = CMYKtoRGB(cmyk);
-    #endif
 
     if (_PointillismEnable > 0.5)
     {
@@ -503,6 +476,29 @@ fixed4 GetDither3DColor_(float2 uv_DitherTex, float2 uvPointillism, float4 scree
             float hasTriplanarWeights = step(MIN_CONTRAST_EPSILON, pointillismTriplanarWeights.x + pointillismTriplanarWeights.y + pointillismTriplanarWeights.z);
             fixed3 pointillismVis = lerp(pointillismSourceVis, pointillismTriplanarWeights, hasTriplanarWeights);
             color.rgb = lerp(color.rgb, pointillismVis, POINTILLISM_DEBUG_BLEND);
+        #endif
+    }
+    else
+    {
+        #ifdef DITHERCOL_GRAYSCALE
+            fixed4 dither = GetDither3D_(uv_DitherTex, screenPos, dx, dy, GetGrayscale(color));
+            color.rgb = dither.x;
+            #if (DEBUG_FRACTAL)
+                fixed3 uvVis = dither.yzw;
+                color.rgb = lerp(color.rgb, uvVis, 0.7);
+            #endif
+        #elif DITHERCOL_RGB
+            color.r = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.r).x;
+            color.g = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.g).x;
+            color.b = GetDither3D_(uv_DitherTex, screenPos, dx, dy, color.b).x;
+        #elif DITHERCOL_CMYK
+            fixed4 cmyk = RGBtoCMYK(color.rgb);
+            // Get dither pattern for C, M, Y, K and angles 15, 75, 0, 45.
+            cmyk.x = GetDither3D_(RotateUV(uv_DitherTex, float2(0.966, 0.259)), screenPos, dx, dy, cmyk.x).x;
+            cmyk.y = GetDither3D_(RotateUV(uv_DitherTex, float2(0.259, 0.966)), screenPos, dx, dy, cmyk.y).x;
+            cmyk.z = GetDither3D_(RotateUV(uv_DitherTex, float2(1.000, 0.000)), screenPos, dx, dy, cmyk.z).x;
+            cmyk.w = GetDither3D_(RotateUV(uv_DitherTex, float2(0.707, 0.707)), screenPos, dx, dy, cmyk.w).x;
+            color.rgb = CMYKtoRGB(cmyk);
         #endif
     }
 
