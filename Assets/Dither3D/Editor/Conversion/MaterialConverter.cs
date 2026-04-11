@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 /// <summary>
 /// Converts source materials into dither materials via registry mapping rules.
@@ -289,8 +290,8 @@ public class MaterialConverter
             return;
         }
 
-        ShaderUtil.ShaderPropertyType sourceType;
-        ShaderUtil.ShaderPropertyType targetType;
+        ShaderPropertyType sourceType;
+        ShaderPropertyType targetType;
         if (!TryGetShaderPropertyType(sourceMaterial.shader, sourceProperty, out sourceType) ||
             !TryGetShaderPropertyType(targetMaterial.shader, targetProperty, out targetType) ||
             !IsFloatLike(sourceType) ||
@@ -314,7 +315,7 @@ public class MaterialConverter
         int ruleIndex,
         ConversionResult result)
     {
-        ShaderUtil.ShaderPropertyType targetType;
+        ShaderPropertyType targetType;
         if (!TryGetShaderPropertyType(targetMaterial.shader, targetProperty, out targetType) || !IsFloatLike(targetType))
         {
             result.AddWarning(
@@ -324,7 +325,7 @@ public class MaterialConverter
 
         if (sourceMaterial.HasProperty(sourceProperty))
         {
-            ShaderUtil.ShaderPropertyType sourceType;
+            ShaderPropertyType sourceType;
             if (TryGetShaderPropertyType(sourceMaterial.shader, sourceProperty, out sourceType) && IsFloatLike(sourceType))
             {
                 targetMaterial.SetFloat(targetProperty, sourceMaterial.GetFloat(sourceProperty));
@@ -337,15 +338,15 @@ public class MaterialConverter
 
     static bool TryCopyPropertyValue(Material sourceMaterial, Material targetMaterial, string sourceProperty, string targetProperty)
     {
-        ShaderUtil.ShaderPropertyType sourceType;
-        ShaderUtil.ShaderPropertyType targetType;
+        ShaderPropertyType sourceType;
+        ShaderPropertyType targetType;
         if (!TryGetShaderPropertyType(sourceMaterial.shader, sourceProperty, out sourceType) ||
             !TryGetShaderPropertyType(targetMaterial.shader, targetProperty, out targetType))
         {
             return false;
         }
 
-        if (sourceType == ShaderUtil.ShaderPropertyType.Float || sourceType == ShaderUtil.ShaderPropertyType.Range)
+        if (sourceType == ShaderPropertyType.Float || sourceType == ShaderPropertyType.Range)
         {
             if (!IsFloatLike(targetType))
                 return false;
@@ -354,19 +355,19 @@ public class MaterialConverter
             return true;
         }
 
-        if (sourceType == ShaderUtil.ShaderPropertyType.Color && targetType == ShaderUtil.ShaderPropertyType.Color)
+        if (sourceType == ShaderPropertyType.Color && targetType == ShaderPropertyType.Color)
         {
             targetMaterial.SetColor(targetProperty, sourceMaterial.GetColor(sourceProperty));
             return true;
         }
 
-        if (sourceType == ShaderUtil.ShaderPropertyType.Vector && targetType == ShaderUtil.ShaderPropertyType.Vector)
+        if (sourceType == ShaderPropertyType.Vector && targetType == ShaderPropertyType.Vector)
         {
             targetMaterial.SetVector(targetProperty, sourceMaterial.GetVector(sourceProperty));
             return true;
         }
 
-        if (sourceType == ShaderUtil.ShaderPropertyType.TexEnv && targetType == ShaderUtil.ShaderPropertyType.TexEnv)
+        if (sourceType == ShaderPropertyType.Texture && targetType == ShaderPropertyType.Texture)
         {
             targetMaterial.SetTexture(targetProperty, sourceMaterial.GetTexture(sourceProperty));
             targetMaterial.SetTextureScale(targetProperty, sourceMaterial.GetTextureScale(sourceProperty));
@@ -401,10 +402,10 @@ public class MaterialConverter
                 explicitlyUnsupportedProperties.Add(unsupportedProperty);
         }
 
-        int propertyCount = ShaderUtil.GetPropertyCount(sourceShader);
+        int propertyCount = sourceShader.GetPropertyCount();
         for (int i = 0; i < propertyCount; i++)
         {
-            string sourcePropertyName = ShaderUtil.GetPropertyName(sourceShader, i);
+            string sourcePropertyName = sourceShader.GetPropertyName(i);
             if (!mappedProperties.Contains(sourcePropertyName) && !explicitlyUnsupportedProperties.Contains(sourcePropertyName))
             {
                 result.AddWarning(
@@ -440,29 +441,29 @@ public class MaterialConverter
 
     static bool ShaderHasProperty(Shader shader, string propertyName)
     {
-        ShaderUtil.ShaderPropertyType ignored;
+        ShaderPropertyType ignored;
         return TryGetShaderPropertyType(shader, propertyName, out ignored);
     }
 
-    static bool TryGetShaderPropertyType(Shader shader, string propertyName, out ShaderUtil.ShaderPropertyType propertyType)
+    static bool TryGetShaderPropertyType(Shader shader, string propertyName, out ShaderPropertyType propertyType)
     {
-        int propertyCount = ShaderUtil.GetPropertyCount(shader);
+        int propertyCount = shader.GetPropertyCount();
         for (int i = 0; i < propertyCount; i++)
         {
-            if (string.Equals(ShaderUtil.GetPropertyName(shader, i), propertyName, StringComparison.Ordinal))
+            if (string.Equals(shader.GetPropertyName(i), propertyName, StringComparison.Ordinal))
             {
-                propertyType = ShaderUtil.GetPropertyType(shader, i);
+                propertyType = shader.GetPropertyType(i);
                 return true;
             }
         }
 
-        propertyType = ShaderUtil.ShaderPropertyType.Float;
+        propertyType = ShaderPropertyType.Float;
         return false;
     }
 
-    static bool IsFloatLike(ShaderUtil.ShaderPropertyType propertyType)
+    static bool IsFloatLike(ShaderPropertyType propertyType)
     {
-        return propertyType == ShaderUtil.ShaderPropertyType.Float || propertyType == ShaderUtil.ShaderPropertyType.Range;
+        return propertyType == ShaderPropertyType.Float || propertyType == ShaderPropertyType.Range;
     }
 
     static string ResolveOutputDirectory(Material sourceMaterial, string outputDirectory)

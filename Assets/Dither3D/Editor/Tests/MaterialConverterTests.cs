@@ -206,10 +206,10 @@ public class MaterialConverterTests
         if (shader == null || string.IsNullOrEmpty(propertyName))
             return false;
 
-        int propertyCount = ShaderUtil.GetPropertyCount(shader);
+        int propertyCount = shader.GetPropertyCount();
         for (int i = 0; i < propertyCount; i++)
         {
-            if (ShaderUtil.GetPropertyName(shader, i) == propertyName)
+            if (shader.GetPropertyName(i) == propertyName)
                 return true;
         }
 

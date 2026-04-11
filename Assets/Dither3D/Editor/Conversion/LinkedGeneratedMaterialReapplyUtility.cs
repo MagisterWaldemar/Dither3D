@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 public enum LinkedGeneratedMaterialUpdatePolicy
 {
@@ -188,27 +189,27 @@ public static class LinkedGeneratedMaterialReapplyUtility
 
     static void CopyUnmappedProperties(Material source, Material destination, HashSet<string> mappedTargetProperties)
     {
-        int propertyCount = ShaderUtil.GetPropertyCount(source.shader);
+        int propertyCount = source.shader.GetPropertyCount();
         for (int i = 0; i < propertyCount; i++)
         {
-            string propertyName = ShaderUtil.GetPropertyName(source.shader, i);
+            string propertyName = source.shader.GetPropertyName(i);
             if (mappedTargetProperties.Contains(propertyName) || !destination.HasProperty(propertyName))
                 continue;
 
-            ShaderUtil.ShaderPropertyType propertyType = ShaderUtil.GetPropertyType(source.shader, i);
+            ShaderPropertyType propertyType = source.shader.GetPropertyType(i);
             switch (propertyType)
             {
-                case ShaderUtil.ShaderPropertyType.Float:
-                case ShaderUtil.ShaderPropertyType.Range:
+                case ShaderPropertyType.Float:
+                case ShaderPropertyType.Range:
                     destination.SetFloat(propertyName, source.GetFloat(propertyName));
                     break;
-                case ShaderUtil.ShaderPropertyType.Color:
+                case ShaderPropertyType.Color:
                     destination.SetColor(propertyName, source.GetColor(propertyName));
                     break;
-                case ShaderUtil.ShaderPropertyType.Vector:
+                case ShaderPropertyType.Vector:
                     destination.SetVector(propertyName, source.GetVector(propertyName));
                     break;
-                case ShaderUtil.ShaderPropertyType.TexEnv:
+                case ShaderPropertyType.Texture:
                     destination.SetTexture(propertyName, source.GetTexture(propertyName));
                     destination.SetTextureScale(propertyName, source.GetTextureScale(propertyName));
                     destination.SetTextureOffset(propertyName, source.GetTextureOffset(propertyName));
