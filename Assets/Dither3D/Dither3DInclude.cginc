@@ -81,6 +81,7 @@ static const float POINTILLISM_RANK_SPREAD_OFFSET = 0.19;
 static const float POINTILLISM_RANK_PRIMARY_WEIGHT = 0.67;
 static const float POINTILLISM_RANK_SECONDARY_WEIGHT = 0.33;
 static const float POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE = 10.0;
+static const float POINTILLISM_TRI_MIX_TRANSFER_SCALE = 0.5;
 static const float PATTERN_SOURCE_BLUENOISE_THRESHOLD = 0.5;
 static const float POINTILLISM_COLORMODE_OKLAB_THRESHOLD = 0.5;
 static const fixed3 POINTILLISM_SOURCE_VIS_UV = fixed3(0.1, 0.7, 1.0);
@@ -199,7 +200,7 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
     // Richness scales third-tone strength from 0 (near 2 steps) toward 1 (higher step counts).
     float richness = saturate((steps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
     // Symmetric transfer peaks at mid-bin values and fades near bin edges to conserve expected brightness.
-    float lowTransfer = 0.5 * fracValue * (1.0 - fracValue) * richness;
+    float lowTransfer = POINTILLISM_TRI_MIX_TRANSFER_SCALE * fracValue * (1.0 - fracValue) * richness;
     float lowProb = lowTransfer;
     float highProb = fracValue + lowTransfer;
     float midProb = 1.0 - lowProb - highProb;
@@ -217,7 +218,11 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
 
     float lowThreshold = lowProb;
     float midThreshold = lowProb + midProb;
-    float chosenIndex = (ditherThreshold < lowThreshold) ? lowIndex : ((ditherThreshold < midThreshold) ? midIndex : highIndex);
+    float chosenIndex = highIndex;
+    if (ditherThreshold < lowThreshold)
+        chosenIndex = lowIndex;
+    else if (ditherThreshold < midThreshold)
+        chosenIndex = midIndex;
     return chosenIndex / maxStepIndex;
 }
 
