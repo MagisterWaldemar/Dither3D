@@ -203,7 +203,7 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
     float lowTransfer = POINTILLISM_TRI_MIX_TRANSFER_SCALE * fracValue * (1.0 - fracValue) * richness;
     float lowProb = lowTransfer;
     float highProb = fracValue + lowTransfer;
-    float midProb = 1.0 - lowProb - highProb;
+    float midProb = max(0.0, 1.0 - lowProb - highProb);
 
     if (lowIndex >= midIndex)
     {
@@ -215,6 +215,9 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
         midProb += highProb;
         highProb = 0.0;
     }
+    float probSum = max(MIN_POINTILLISM_RANGE, lowProb + midProb + highProb);
+    lowProb /= probSum;
+    midProb /= probSum;
 
     float lowThreshold = lowProb;
     float midThreshold = lowProb + midProb;
