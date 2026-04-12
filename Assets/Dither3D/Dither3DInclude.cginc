@@ -185,6 +185,40 @@ float2 ResolvePointillismStrokeDirection(float2 dx, float2 dy, float3 worldNorma
     return derivOrthoDir;
 }
 
+float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps, fixed triRank)
+{
+    float maxStepIndex = max(1.0, steps - 1.0);
+    float scaledValue = saturate(normalizedValue) * maxStepIndex;
+    float midIndex = floor(scaledValue);
+    float fracValue = frac(scaledValue);
+    float lowIndex = max(0.0, midIndex - 1.0);
+    float highIndex = min(maxStepIndex, midIndex + 1.0);
+
+    // Base two-tone dithering is (mid=1-frac, high=frac).
+    // We inject a symmetric transfer term to introduce a third tone while preserving expected brightness.
+    float richness = saturate((steps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
+    float lowTransfer = 0.5 * fracValue * (1.0 - fracValue) * richness;
+    float lowProb = lowTransfer;
+    float highProb = fracValue + lowTransfer;
+    float midProb = 1.0 - lowProb - highProb;
+
+    if (lowIndex >= midIndex)
+    {
+        midProb += lowProb;
+        lowProb = 0.0;
+    }
+    if (highIndex <= midIndex)
+    {
+        midProb += highProb;
+        highProb = 0.0;
+    }
+
+    float lowThreshold = lowProb;
+    float midThreshold = lowProb + midProb;
+    float chosenIndex = (triRank < lowThreshold) ? lowIndex : ((triRank < midThreshold) ? midIndex : highIndex);
+    return chosenIndex / maxStepIndex;
+}
+
 fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 worldNormal, float hasWorldData, fixed3 color)
 {
     fixed3 clampMin = saturate(_PointillismClampMinColor.rgb);
@@ -221,30 +255,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
             lab.yz *= maxChroma / chroma;
 
         float steps = max(2.0, _PointillismColorSteps);
-        float maxStepIndex = steps - 1.0;
-        float scaledLightness = saturate(lab.x) * maxStepIndex;
-        float midIndex = floor(scaledLightness);
-        float fracLightness = frac(scaledLightness);
-        float lowIndex = max(0.0, midIndex - 1.0);
-        float highIndex = min(maxStepIndex, midIndex + 1.0);
-        float richness = saturate((steps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
-        float lowProb = 0.5 * fracLightness * (1.0 - fracLightness) * richness;
-        float highProb = fracLightness + lowProb;
-        float midProb = 1.0 - lowProb - highProb;
-        if (lowIndex >= midIndex)
-        {
-            midProb += lowProb;
-            lowProb = 0.0;
-        }
-        if (highIndex <= midIndex)
-        {
-            midProb += highProb;
-            highProb = 0.0;
-        }
-        float lowThreshold = lowProb;
-        float midThreshold = lowProb + midProb;
-        float chosenIndex = (triRank < lowThreshold) ? lowIndex : ((triRank < midThreshold) ? midIndex : highIndex);
-        lab.x = chosenIndex / maxStepIndex;
+        lab.x = ResolvePointillismTrinaryQuantizedValue(lab.x, steps, triRank);
 
         remapped = clamp(saturate(OKLabToRGB(lab)), clampMin, clampMax);
     }
@@ -256,30 +267,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
         fixed quantizedHue = floor(scaledHue + 0.5) / hueSteps;
 
         float lumSteps = max(2.0, _PointillismColorSteps);
-        float maxStepIndex = lumSteps - 1.0;
-        float scaledLum = hsl.z * maxStepIndex;
-        float midIndex = floor(scaledLum);
-        float fracLum = frac(scaledLum);
-        float lowIndex = max(0.0, midIndex - 1.0);
-        float highIndex = min(maxStepIndex, midIndex + 1.0);
-        float richness = saturate((lumSteps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
-        float lowProb = 0.5 * fracLum * (1.0 - fracLum) * richness;
-        float highProb = fracLum + lowProb;
-        float midProb = 1.0 - lowProb - highProb;
-        if (lowIndex >= midIndex)
-        {
-            midProb += lowProb;
-            lowProb = 0.0;
-        }
-        if (highIndex <= midIndex)
-        {
-            midProb += highProb;
-            highProb = 0.0;
-        }
-        float lowThreshold = lowProb;
-        float midThreshold = lowProb + midProb;
-        float chosenIndex = (triRank < lowThreshold) ? lowIndex : ((triRank < midThreshold) ? midIndex : highIndex);
-        fixed ditheredLum = chosenIndex / maxStepIndex;
+        fixed ditheredLum = ResolvePointillismTrinaryQuantizedValue(hsl.z, lumSteps, triRank);
 
         remapped = HSLtoRGB(fixed3(quantizedHue, hsl.y, ditheredLum));
         remapped = clamp(remapped, clampMin, clampMax);
@@ -294,30 +282,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
         fixed normalizedLum = saturate((inputLum - minLum) / lumRange);
 
         float steps = max(2.0, _PointillismColorSteps);
-        float maxStepIndex = steps - 1.0;
-        float scaledLum = normalizedLum * maxStepIndex;
-        float midIndex = floor(scaledLum);
-        float fracLum = frac(scaledLum);
-        float lowIndex = max(0.0, midIndex - 1.0);
-        float highIndex = min(maxStepIndex, midIndex + 1.0);
-        float richness = saturate((steps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
-        float lowProb = 0.5 * fracLum * (1.0 - fracLum) * richness;
-        float highProb = fracLum + lowProb;
-        float midProb = 1.0 - lowProb - highProb;
-        if (lowIndex >= midIndex)
-        {
-            midProb += lowProb;
-            lowProb = 0.0;
-        }
-        if (highIndex <= midIndex)
-        {
-            midProb += highProb;
-            highProb = 0.0;
-        }
-        float lowThreshold = lowProb;
-        float midThreshold = lowProb + midProb;
-        float chosenIndex = (triRank < lowThreshold) ? lowIndex : ((triRank < midThreshold) ? midIndex : highIndex);
-        fixed ditheredLum = chosenIndex / maxStepIndex;
+        fixed ditheredLum = ResolvePointillismTrinaryQuantizedValue(normalizedLum, steps, triRank);
         remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, inputLum)), clampMin, clampMax);
     }
 
