@@ -123,6 +123,30 @@ public class Dither3DGlobalProperties : MonoBehaviour
     [OverrideProperty] public float pointillismLUTBlend = 0f;
     [HideInInspector] public bool pointillismLUTBlendOverride;
 
+    [OverrideProperty] public float pointillismCompositionMode = 0f;
+    [HideInInspector] public bool pointillismCompositionModeOverride;
+
+    [OverrideProperty] public float pointillismBaseMuting = 0.35f;
+    [HideInInspector] public bool pointillismBaseMutingOverride;
+
+    [OverrideProperty] public float pointillismChromaPush = 0.6f;
+    [HideInInspector] public bool pointillismChromaPushOverride;
+
+    [OverrideProperty] public float pointillismComplementaryAccentAmount = 0.2f;
+    [HideInInspector] public bool pointillismComplementaryAccentAmountOverride;
+
+    [OverrideProperty] public float pointillismAccentSparsity = 0.75f;
+    [HideInInspector] public bool pointillismAccentSparsityOverride;
+
+    [OverrideProperty] public float pointillismDetailSensitivityAlbedo = 1f;
+    [HideInInspector] public bool pointillismDetailSensitivityAlbedoOverride;
+
+    [OverrideProperty] public float pointillismDetailSensitivityNormal = 1f;
+    [HideInInspector] public bool pointillismDetailSensitivityNormalOverride;
+
+    [OverrideProperty] public float pointillismHighlightAccentStrength = 0.35f;
+    [HideInInspector] public bool pointillismHighlightAccentStrengthOverride;
+
     void OnEnable()
     {
         CollectMaterials();
@@ -230,6 +254,14 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 out float presetHueSteps,
                 out Color presetClampMin,
                 out Color presetClampMax,
+                out float presetCompositionMode,
+                out float presetBaseMuting,
+                out float presetChromaPush,
+                out float presetComplementaryAccentAmount,
+                out float presetAccentSparsity,
+                out float presetDetailSensitivityAlbedo,
+                out float presetDetailSensitivityNormal,
+                out float presetHighlightAccentStrength,
                 out float presetPhaseSpeed,
                 out float presetHysteresis,
                 out float presetMinDot);
@@ -243,6 +275,14 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderOverride("_PointillismHueSteps", presetHueSteps, ref changed);
             SetShaderColorOverride("_PointillismClampMinColor", presetClampMin, ref changed);
             SetShaderColorOverride("_PointillismClampMaxColor", presetClampMax, ref changed);
+            SetShaderOverride("_PointillismCompositionMode", presetCompositionMode, ref changed);
+            SetShaderOverride("_PointillismBaseMuting", presetBaseMuting, ref changed);
+            SetShaderOverride("_PointillismChromaPush", presetChromaPush, ref changed);
+            SetShaderOverride("_PointillismComplementaryAccentAmount", presetComplementaryAccentAmount, ref changed);
+            SetShaderOverride("_PointillismAccentSparsity", presetAccentSparsity, ref changed);
+            SetShaderOverride("_PointillismDetailSensitivityAlbedo", presetDetailSensitivityAlbedo, ref changed);
+            SetShaderOverride("_PointillismDetailSensitivityNormal", presetDetailSensitivityNormal, ref changed);
+            SetShaderOverride("_PointillismHighlightAccentStrength", presetHighlightAccentStrength, ref changed);
             SetShaderOverride("_BlueNoisePhaseSpeed", presetPhaseSpeed, ref changed);
             SetShaderOverride("_BlueNoiseHysteresis", presetHysteresis, ref changed);
             SetShaderOverride("_BlueNoiseMinDot", presetMinDot, ref changed);
@@ -275,6 +315,22 @@ public class Dither3DGlobalProperties : MonoBehaviour
             SetShaderColorOverride("_PointillismClampMaxColor", pointillismClampMaxColor, ref changed);
         if (pointillismLUTBlendOverride)
             SetShaderOverride("_PointillismLUTBlend", pointillismLUTBlend, ref changed);
+        if (pointillismCompositionModeOverride)
+            SetShaderOverride("_PointillismCompositionMode", pointillismCompositionMode, ref changed);
+        if (pointillismBaseMutingOverride)
+            SetShaderOverride("_PointillismBaseMuting", pointillismBaseMuting, ref changed);
+        if (pointillismChromaPushOverride)
+            SetShaderOverride("_PointillismChromaPush", pointillismChromaPush, ref changed);
+        if (pointillismComplementaryAccentAmountOverride)
+            SetShaderOverride("_PointillismComplementaryAccentAmount", pointillismComplementaryAccentAmount, ref changed);
+        if (pointillismAccentSparsityOverride)
+            SetShaderOverride("_PointillismAccentSparsity", pointillismAccentSparsity, ref changed);
+        if (pointillismDetailSensitivityAlbedoOverride)
+            SetShaderOverride("_PointillismDetailSensitivityAlbedo", pointillismDetailSensitivityAlbedo, ref changed);
+        if (pointillismDetailSensitivityNormalOverride)
+            SetShaderOverride("_PointillismDetailSensitivityNormal", pointillismDetailSensitivityNormal, ref changed);
+        if (pointillismHighlightAccentStrengthOverride)
+            SetShaderOverride("_PointillismHighlightAccentStrength", pointillismHighlightAccentStrength, ref changed);
 
         #if UNITY_EDITOR
         if (changed && saveInMaterials)
@@ -359,6 +415,14 @@ public class Dither3DGlobalProperties : MonoBehaviour
         out float hueSteps,
         out Color clampMin,
         out Color clampMax,
+        out float compositionMode,
+        out float baseMuting,
+        out float chromaPush,
+        out float complementaryAccentAmount,
+        out float accentSparsity,
+        out float detailSensitivityAlbedo,
+        out float detailSensitivityNormal,
+        out float highlightAccentStrength,
         out float phaseSpeed,
         out float hysteresis,
         out float minDot)
@@ -376,6 +440,14 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 hueSteps = 6f;
                 clampMin = new Color(0.05f, 0.05f, 0.05f, 1f);
                 clampMax = new Color(0.95f, 0.95f, 0.95f, 1f);
+                compositionMode = 1f;
+                baseMuting = 0.50f;
+                chromaPush = 0.40f;
+                complementaryAccentAmount = 0.12f;
+                accentSparsity = 0.88f;
+                detailSensitivityAlbedo = 0.80f;
+                detailSensitivityNormal = 0.75f;
+                highlightAccentStrength = 0.20f;
                 phaseSpeed = 0.08f;
                 hysteresis = 0.90f;
                 minDot = 0.18f;
@@ -391,6 +463,14 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 hueSteps = 12f;
                 clampMin = Color.black;
                 clampMax = Color.white;
+                compositionMode = 1f;
+                baseMuting = 0.22f;
+                chromaPush = 1.20f;
+                complementaryAccentAmount = 0.45f;
+                accentSparsity = 0.55f;
+                detailSensitivityAlbedo = 1.35f;
+                detailSensitivityNormal = 1.40f;
+                highlightAccentStrength = 0.70f;
                 phaseSpeed = 0.45f;
                 hysteresis = 0.45f;
                 minDot = 0.04f;
@@ -406,6 +486,14 @@ public class Dither3DGlobalProperties : MonoBehaviour
                 hueSteps = 8f;
                 clampMin = Color.black;
                 clampMax = Color.white;
+                compositionMode = 1f;
+                baseMuting = 0.35f;
+                chromaPush = 0.60f;
+                complementaryAccentAmount = 0.20f;
+                accentSparsity = 0.75f;
+                detailSensitivityAlbedo = 1.00f;
+                detailSensitivityNormal = 1.00f;
+                highlightAccentStrength = 0.35f;
                 phaseSpeed = 0.15f;
                 hysteresis = 0.80f;
                 minDot = 0.12f;
