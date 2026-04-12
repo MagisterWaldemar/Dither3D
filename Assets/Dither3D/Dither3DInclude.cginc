@@ -73,6 +73,8 @@ static const float MIN_CONTRAST_EPSILON = 0.0001;
 static const float MIN_DOT_CONTRAST_REDUCTION_FACTOR = 0.75;
 static const float MIN_VALID_TEXTURE_SIZE = 1.5;
 static const float MIN_POINTILLISM_RANGE = 0.0001;
+static const float POINTILLISM_MIN_CHROMA_PRESERVE_THRESHOLD = 0.04;
+static const float POINTILLISM_CHROMA_PRESERVE_RATIO = 0.35;
 static const float PATTERN_SOURCE_BLUENOISE_THRESHOLD = 0.5;
 static const float POINTILLISM_COLORMODE_OKLAB_THRESHOLD = 0.5;
 static const fixed3 POINTILLISM_SOURCE_VIS_UV = fixed3(0.1, 0.7, 1.0);
@@ -197,7 +199,11 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
     scaleAwareSpread = clamp(scaleAwareSpread, 0.01, 2.0);
 
     float2 uvBase = frac(uvPointillism);
-    fixed rank = SamplePointillismRank(frac(uvBase + blendedDir * scaleAwareSpread * spread));
+    float2 rankUvA = frac(uvBase + blendedDir * scaleAwareSpread * spread);
+    float2 rankUvB = frac(uvBase + float2(0.37, 0.61) + blendedDir * scaleAwareSpread * (spread * 1.73 + 0.19));
+    fixed rank = SamplePointillismRank(rankUvA);
+    fixed rankSecondary = SamplePointillismRank(rankUvB);
+    fixed triRank = frac(rank * 0.67 + rankSecondary * 0.33);
     fixed3 remapped = clamped;
 
     if (_PointillismColorModel > POINTILLISM_COLORMODE_OKLAB_THRESHOLD)
@@ -209,11 +215,30 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
             lab.yz *= maxChroma / chroma;
 
         float steps = max(2.0, _PointillismColorSteps);
-        float scaledLightness = saturate(lab.x) * (steps - 1.0);
-        float lowLightness = floor(scaledLightness) / (steps - 1.0);
-        float highLightness = ceil(scaledLightness) / (steps - 1.0);
+        float maxStepIndex = steps - 1.0;
+        float scaledLightness = saturate(lab.x) * maxStepIndex;
+        float midIndex = floor(scaledLightness);
         float fracLightness = frac(scaledLightness);
-        lab.x = (rank <= fracLightness) ? highLightness : lowLightness;
+        float lowIndex = max(0.0, midIndex - 1.0);
+        float highIndex = min(maxStepIndex, midIndex + 1.0);
+        float richness = saturate((steps - 2.0) / 10.0);
+        float lowProb = 0.5 * fracLightness * (1.0 - fracLightness) * richness;
+        float highProb = fracLightness + lowProb;
+        float midProb = 1.0 - lowProb - highProb;
+        if (lowIndex >= midIndex)
+        {
+            midProb += lowProb;
+            lowProb = 0.0;
+        }
+        if (highIndex <= midIndex)
+        {
+            midProb += highProb;
+            highProb = 0.0;
+        }
+        float lowThreshold = lowProb;
+        float midThreshold = lowProb + midProb;
+        float chosenIndex = (triRank < lowThreshold) ? lowIndex : ((triRank < midThreshold) ? midIndex : highIndex);
+        lab.x = chosenIndex / maxStepIndex;
 
         remapped = clamp(saturate(OKLabToRGB(lab)), clampMin, clampMax);
     }
@@ -225,11 +250,30 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
         fixed quantizedHue = floor(scaledHue + 0.5) / hueSteps;
 
         float lumSteps = max(2.0, _PointillismColorSteps);
-        fixed scaledLum = hsl.z * (lumSteps - 1.0);
-        fixed lowLum = floor(scaledLum) / (lumSteps - 1.0);
-        fixed highLum = ceil(scaledLum) / (lumSteps - 1.0);
-        fixed fracLum = frac(scaledLum);
-        fixed ditheredLum = (rank <= fracLum) ? highLum : lowLum;
+        float maxStepIndex = lumSteps - 1.0;
+        float scaledLum = hsl.z * maxStepIndex;
+        float midIndex = floor(scaledLum);
+        float fracLum = frac(scaledLum);
+        float lowIndex = max(0.0, midIndex - 1.0);
+        float highIndex = min(maxStepIndex, midIndex + 1.0);
+        float richness = saturate((lumSteps - 2.0) / 10.0);
+        float lowProb = 0.5 * fracLum * (1.0 - fracLum) * richness;
+        float highProb = fracLum + lowProb;
+        float midProb = 1.0 - lowProb - highProb;
+        if (lowIndex >= midIndex)
+        {
+            midProb += lowProb;
+            lowProb = 0.0;
+        }
+        if (highIndex <= midIndex)
+        {
+            midProb += highProb;
+            highProb = 0.0;
+        }
+        float lowThreshold = lowProb;
+        float midThreshold = lowProb + midProb;
+        float chosenIndex = (triRank < lowThreshold) ? lowIndex : ((triRank < midThreshold) ? midIndex : highIndex);
+        fixed ditheredLum = chosenIndex / maxStepIndex;
 
         remapped = HSLtoRGB(fixed3(quantizedHue, hsl.y, ditheredLum));
         remapped = clamp(remapped, clampMin, clampMax);
@@ -244,13 +288,43 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
         fixed normalizedLum = saturate((inputLum - minLum) / lumRange);
 
         float steps = max(2.0, _PointillismColorSteps);
-        fixed scaledLum = normalizedLum * (steps - 1.0);
-        fixed lowLum = floor(scaledLum) / (steps - 1.0);
-        fixed highLum = ceil(scaledLum) / (steps - 1.0);
-        fixed fracLum = frac(scaledLum);
-        fixed ditheredLum = (rank <= fracLum) ? highLum : lowLum;
+        float maxStepIndex = steps - 1.0;
+        float scaledLum = normalizedLum * maxStepIndex;
+        float midIndex = floor(scaledLum);
+        float fracLum = frac(scaledLum);
+        float lowIndex = max(0.0, midIndex - 1.0);
+        float highIndex = min(maxStepIndex, midIndex + 1.0);
+        float richness = saturate((steps - 2.0) / 10.0);
+        float lowProb = 0.5 * fracLum * (1.0 - fracLum) * richness;
+        float highProb = fracLum + lowProb;
+        float midProb = 1.0 - lowProb - highProb;
+        if (lowIndex >= midIndex)
+        {
+            midProb += lowProb;
+            lowProb = 0.0;
+        }
+        if (highIndex <= midIndex)
+        {
+            midProb += highProb;
+            highProb = 0.0;
+        }
+        float lowThreshold = lowProb;
+        float midThreshold = lowProb + midProb;
+        float chosenIndex = (triRank < lowThreshold) ? lowIndex : ((triRank < midThreshold) ? midIndex : highIndex);
+        fixed ditheredLum = chosenIndex / maxStepIndex;
         remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, inputLum)), clampMin, clampMax);
     }
+
+    fixed sourceMax = max(clamped.r, max(clamped.g, clamped.b));
+    fixed sourceMin = min(clamped.r, min(clamped.g, clamped.b));
+    fixed sourceSaturation = sourceMax - sourceMin;
+    fixed remappedMax = max(remapped.r, max(remapped.g, remapped.b));
+    fixed remappedMin = min(remapped.r, min(remapped.g, remapped.b));
+    fixed remappedSaturation = remappedMax - remappedMin;
+    fixed desiredMinSaturation = sourceSaturation * POINTILLISM_CHROMA_PRESERVE_RATIO;
+    fixed preserveAmount = step(POINTILLISM_MIN_CHROMA_PRESERVE_THRESHOLD, sourceSaturation) *
+                           saturate((desiredMinSaturation - remappedSaturation) / max(MIN_POINTILLISM_RANGE, desiredMinSaturation));
+    remapped = lerp(remapped, clamped, preserveAmount);
 
     float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
     float lutBlend = saturate(_PointillismLUTBlend) * hasLut;
