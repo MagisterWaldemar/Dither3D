@@ -101,6 +101,13 @@ static const float POINTILLISM_ACCENT_MAX_WEIGHT = 0.35;
 static const float POINTILLISM_HIGHLIGHT_MAX_WEIGHT = 0.30;
 static const float POINTILLISM_DETAIL_GRADIENT_SCALE = 8.0;
 static const float POINTILLISM_DETAIL_NORMAL_SCALE = 2.5;
+static const float POINTILLISM_DETAIL_ALBEDO_WEIGHT = 0.6;
+static const float POINTILLISM_DETAIL_NORMAL_WEIGHT = 0.4;
+static const float POINTILLISM_HIGHLIGHT_LIGHTNESS_THRESHOLD = 0.6;
+static const float POINTILLISM_HIGHLIGHT_LIGHTNESS_SCALE = 2.5;
+static const float POINTILLISM_HIGHLIGHT_NORMAL_WEIGHT = 0.4;
+static const float POINTILLISM_HIGHLIGHT_ALBEDO_WEIGHT = 0.2;
+static const float POINTILLISM_MAX_ACCENT_WEIGHT_SUM = 0.9;
 
 fixed SampleTemporalRankWithFallback(float2 uvBlue, float phaseOffset)
 {
@@ -354,10 +361,17 @@ fixed3 ApplyPointillismColorComposed(float3 targetColor, fixed triRank, float2 d
     float normalVariation = 0.0;
     if (hasWorldData > 0.5)
         normalVariation = saturate((length(ddx(worldNormal)) + length(ddy(worldNormal))) * POINTILLISM_DETAIL_NORMAL_SCALE * detailSensitivityNormal);
-    float detailSignal = saturate(0.6 * albedoGradient + 0.4 * normalVariation);
+    float detailSignal = saturate(
+        POINTILLISM_DETAIL_ALBEDO_WEIGHT * albedoGradient +
+        POINTILLISM_DETAIL_NORMAL_WEIGHT * normalVariation
+    );
 
-    float luminance = dot(targetColor, float3(0.299, 0.587, 0.114));
-    float highlightSignal = saturate((luminance - 0.6) * 2.5 + normalVariation * 0.4 + albedoGradient * 0.2);
+    float lightness = targetLab.x;
+    float highlightSignal = saturate(
+        (lightness - POINTILLISM_HIGHLIGHT_LIGHTNESS_THRESHOLD) * POINTILLISM_HIGHLIGHT_LIGHTNESS_SCALE +
+        normalVariation * POINTILLISM_HIGHLIGHT_NORMAL_WEIGHT +
+        albedoGradient * POINTILLISM_HIGHLIGHT_ALBEDO_WEIGHT
+    );
 
     float3 foundationLab = targetLab;
     foundationLab.yz *= (1.0 - 0.9 * baseMuting);
@@ -404,9 +418,9 @@ fixed3 ApplyPointillismColorComposed(float3 targetColor, fixed triRank, float2 d
     float complementWeightCapped = min(complementRawWeight, complementCap);
     float highlightWeightCapped = min(highlightRawWeight, highlightCap);
     float accentWeightSum = complementWeightCapped + highlightWeightCapped;
-    if (accentWeightSum > 0.9)
+    if (accentWeightSum > POINTILLISM_MAX_ACCENT_WEIGHT_SUM)
     {
-        float accentScale = 0.9 / accentWeightSum;
+        float accentScale = POINTILLISM_MAX_ACCENT_WEIGHT_SUM / accentWeightSum;
         complementWeightCapped *= accentScale;
         highlightWeightCapped *= accentScale;
     }
