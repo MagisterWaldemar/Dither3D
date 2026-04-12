@@ -185,7 +185,7 @@ float2 ResolvePointillismStrokeDirection(float2 dx, float2 dy, float3 worldNorma
     return derivOrthoDir;
 }
 
-float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps, fixed triRank)
+float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps, fixed ditherThreshold)
 {
     float maxStepIndex = max(1.0, steps - 1.0);
     float scaledValue = saturate(normalizedValue) * maxStepIndex;
@@ -196,7 +196,9 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
 
     // Base two-tone dithering is (mid=1-frac, high=frac).
     // We inject a symmetric transfer term to introduce a third tone while preserving expected brightness.
+    // Richness scales third-tone strength from 0 (near 2 steps) toward 1 (higher step counts).
     float richness = saturate((steps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
+    // Symmetric transfer peaks at mid-bin values and fades near bin edges to conserve expected brightness.
     float lowTransfer = 0.5 * fracValue * (1.0 - fracValue) * richness;
     float lowProb = lowTransfer;
     float highProb = fracValue + lowTransfer;
@@ -215,7 +217,7 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
 
     float lowThreshold = lowProb;
     float midThreshold = lowProb + midProb;
-    float chosenIndex = (triRank < lowThreshold) ? lowIndex : ((triRank < midThreshold) ? midIndex : highIndex);
+    float chosenIndex = (ditherThreshold < lowThreshold) ? lowIndex : ((ditherThreshold < midThreshold) ? midIndex : highIndex);
     return chosenIndex / maxStepIndex;
 }
 
@@ -240,9 +242,11 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
 
     float2 uvBase = frac(uvPointillism);
     float2 rankUvA = frac(uvBase + blendedDir * scaleAwareSpread * spread);
-    float2 rankUvB = frac(uvBase + POINTILLISM_RANK_UV_OFFSET + blendedDir * scaleAwareSpread * (spread * POINTILLISM_RANK_SPREAD_SCALE + POINTILLISM_RANK_SPREAD_OFFSET));
+    float secondarySpread = spread * POINTILLISM_RANK_SPREAD_SCALE + POINTILLISM_RANK_SPREAD_OFFSET;
+    float2 rankUvB = frac(uvBase + POINTILLISM_RANK_UV_OFFSET + blendedDir * scaleAwareSpread * secondarySpread);
     fixed rank = SamplePointillismRank(rankUvA);
     fixed rankSecondary = SamplePointillismRank(rankUvB);
+    // Blend two decorrelated rank samples to reduce repeated two-tone pairings.
     fixed triRank = frac(rank * POINTILLISM_RANK_PRIMARY_WEIGHT + rankSecondary * POINTILLISM_RANK_SECONDARY_WEIGHT);
     fixed3 remapped = clamped;
 
@@ -286,6 +290,8 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
         remapped = clamp(clamped * (ditheredLum / max(MIN_POINTILLISM_RANGE, inputLum)), clampMin, clampMax);
     }
 
+    // If quantization collapses saturation too far for a clearly chromatic source,
+    // blend back toward source color to avoid unintended grayscale-looking output.
     fixed sourceMax = max(clamped.r, max(clamped.g, clamped.b));
     fixed sourceMin = min(clamped.r, min(clamped.g, clamped.b));
     fixed sourceSaturation = sourceMax - sourceMin;
