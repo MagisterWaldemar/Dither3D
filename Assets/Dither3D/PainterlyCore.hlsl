@@ -82,6 +82,42 @@ float3 PainterlyOKLabToRGB(float3 lab)
         -0.0041960863, -0.7034186147,  1.7076147010), lms);
 }
 
+// Gamut-aware soft clamp: when an OKLab colour maps to out-of-gamut RGB,
+// reduce chroma toward the achromatic axis (preserving lightness and hue)
+// instead of independently clipping R, G, B which shifts hue.
+float3 PainterlyOKLabToRGBSafe(float3 lab)
+{
+    float3 rgb = PainterlyOKLabToRGB(lab);
+
+    // If already in gamut, return immediately.
+    float lo = min(rgb.r, min(rgb.g, rgb.b));
+    float hi = max(rgb.r, max(rgb.g, rgb.b));
+    if (lo >= 0.0 && hi <= 1.0)
+        return rgb;
+
+    // Binary-search bisect chroma toward the grey axis (lab.x, 0, 0).
+    // 5 iterations give < 3% chroma error — visually imperceptible.
+    float tLo = 0.0;
+    float tHi = 1.0;
+    float3 grey = float3(lab.x, 0.0, 0.0);
+
+    [unroll]
+    for (int i = 0; i < 5; i++)
+    {
+        float tMid   = (tLo + tHi) * 0.5;
+        float3 trial = lerp(lab, grey, tMid);
+        float3 c     = PainterlyOKLabToRGB(trial);
+        float cLo    = min(c.r, min(c.g, c.b));
+        float cHi    = max(c.r, max(c.g, c.b));
+        if (cLo < 0.0 || cHi > 1.0)
+            tLo = tMid;   // still out of gamut — reduce chroma more
+        else
+            tHi = tMid;   // in gamut — try keeping more chroma
+    }
+
+    return saturate(PainterlyOKLabToRGB(lerp(lab, grey, tHi)));
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  UV ROTATION HELPER
 // ═══════════════════════════════════════════════════════════════════
@@ -211,27 +247,27 @@ PaintPalette GeneratePalette(half3 color)
     float sL = max(0.0, L - _ValueSpread * 0.4);
     float sH = hue + _WarmCool * 0.4;
     float sC = C * max(0.2, 1.0 - _ValueSpread * 0.3);
-    p.shadow = half3(saturate(PainterlyOKLabToRGB(
-                   float3(sL, sC * cos(sH), sC * sin(sH)))));
+    p.shadow = half3(PainterlyOKLabToRGBSafe(
+                   float3(sL, sC * cos(sH), sC * sin(sH))));
 
     // ── Body ─────────────────────────────────────────────────────
     float bC = C * _Chroma;
-    p.body = half3(saturate(PainterlyOKLabToRGB(
-                   float3(L, bC * cos(hue), bC * sin(hue)))));
+    p.body = half3(PainterlyOKLabToRGBSafe(
+                   float3(L, bC * cos(hue), bC * sin(hue))));
 
     // ── Highlight ────────────────────────────────────────────────
     float hL = min(1.0, L + _ValueSpread * 0.3);
     float hH = hue - _WarmCool * 0.2;
     float hC = C * max(0.1, 1.0 - _ValueSpread * 0.5);
-    p.highlight = half3(saturate(PainterlyOKLabToRGB(
-                       float3(hL, hC * cos(hH), hC * sin(hH)))));
+    p.highlight = half3(PainterlyOKLabToRGBSafe(
+                       float3(hL, hC * cos(hH), hC * sin(hH))));
 
     // ── Accent ───────────────────────────────────────────────────
     float aH = hue + 3.14159265 + _HueShift * 6.28318;
     float aC = C * 0.45;
     float aL = clamp(L * 0.8 + 0.1, 0.0, 1.0);
-    p.accent = half3(saturate(PainterlyOKLabToRGB(
-                   float3(aL, aC * cos(aH), aC * sin(aH)))));
+    p.accent = half3(PainterlyOKLabToRGBSafe(
+                   float3(aL, aC * cos(aH), aC * sin(aH))));
 
     return p;
 }
