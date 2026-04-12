@@ -75,6 +75,12 @@ static const float MIN_VALID_TEXTURE_SIZE = 1.5;
 static const float MIN_POINTILLISM_RANGE = 0.0001;
 static const float POINTILLISM_MIN_CHROMA_PRESERVE_THRESHOLD = 0.04;
 static const float POINTILLISM_CHROMA_PRESERVE_RATIO = 0.35;
+static const float2 POINTILLISM_RANK_UV_OFFSET = float2(0.37, 0.61);
+static const float POINTILLISM_RANK_SPREAD_SCALE = 1.73;
+static const float POINTILLISM_RANK_SPREAD_OFFSET = 0.19;
+static const float POINTILLISM_RANK_PRIMARY_WEIGHT = 0.67;
+static const float POINTILLISM_RANK_SECONDARY_WEIGHT = 0.33;
+static const float POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE = 10.0;
 static const float PATTERN_SOURCE_BLUENOISE_THRESHOLD = 0.5;
 static const float POINTILLISM_COLORMODE_OKLAB_THRESHOLD = 0.5;
 static const fixed3 POINTILLISM_SOURCE_VIS_UV = fixed3(0.1, 0.7, 1.0);
@@ -200,10 +206,10 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
 
     float2 uvBase = frac(uvPointillism);
     float2 rankUvA = frac(uvBase + blendedDir * scaleAwareSpread * spread);
-    float2 rankUvB = frac(uvBase + float2(0.37, 0.61) + blendedDir * scaleAwareSpread * (spread * 1.73 + 0.19));
+    float2 rankUvB = frac(uvBase + POINTILLISM_RANK_UV_OFFSET + blendedDir * scaleAwareSpread * (spread * POINTILLISM_RANK_SPREAD_SCALE + POINTILLISM_RANK_SPREAD_OFFSET));
     fixed rank = SamplePointillismRank(rankUvA);
     fixed rankSecondary = SamplePointillismRank(rankUvB);
-    fixed triRank = frac(rank * 0.67 + rankSecondary * 0.33);
+    fixed triRank = frac(rank * POINTILLISM_RANK_PRIMARY_WEIGHT + rankSecondary * POINTILLISM_RANK_SECONDARY_WEIGHT);
     fixed3 remapped = clamped;
 
     if (_PointillismColorModel > POINTILLISM_COLORMODE_OKLAB_THRESHOLD)
@@ -221,7 +227,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
         float fracLightness = frac(scaledLightness);
         float lowIndex = max(0.0, midIndex - 1.0);
         float highIndex = min(maxStepIndex, midIndex + 1.0);
-        float richness = saturate((steps - 2.0) / 10.0);
+        float richness = saturate((steps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
         float lowProb = 0.5 * fracLightness * (1.0 - fracLightness) * richness;
         float highProb = fracLightness + lowProb;
         float midProb = 1.0 - lowProb - highProb;
@@ -256,7 +262,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
         float fracLum = frac(scaledLum);
         float lowIndex = max(0.0, midIndex - 1.0);
         float highIndex = min(maxStepIndex, midIndex + 1.0);
-        float richness = saturate((lumSteps - 2.0) / 10.0);
+        float richness = saturate((lumSteps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
         float lowProb = 0.5 * fracLum * (1.0 - fracLum) * richness;
         float highProb = fracLum + lowProb;
         float midProb = 1.0 - lowProb - highProb;
@@ -294,7 +300,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
         float fracLum = frac(scaledLum);
         float lowIndex = max(0.0, midIndex - 1.0);
         float highIndex = min(maxStepIndex, midIndex + 1.0);
-        float richness = saturate((steps - 2.0) / 10.0);
+        float richness = saturate((steps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
         float lowProb = 0.5 * fracLum * (1.0 - fracLum) * richness;
         float highProb = fracLum + lowProb;
         float midProb = 1.0 - lowProb - highProb;
