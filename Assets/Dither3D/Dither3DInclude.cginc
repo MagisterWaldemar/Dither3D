@@ -206,7 +206,8 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
     float highProb = fracValue + lowTransfer;
     float midProb = max(0.0, 1.0 - lowProb - highProb);
 
-    if (lowIndex >= midIndex && highIndex <= midIndex)
+    // When all indices collapse to one slot (e.g. at extreme range boundaries), force full weight to mid.
+    if (lowIndex == midIndex && highIndex == midIndex)
     {
         lowProb = 0.0;
         highProb = 0.0;
@@ -225,6 +226,7 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
     float probSum = max(MIN_POINTILLISM_RANGE, lowProb + midProb + highProb);
     lowProb /= probSum;
     midProb /= probSum;
+    highProb /= probSum;
 
     float lowThreshold = lowProb;
     float midThreshold = lowProb + midProb;
