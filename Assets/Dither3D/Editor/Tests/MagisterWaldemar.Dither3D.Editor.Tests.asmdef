@@ -1,0 +1,25 @@
+{
+    "name": "MagisterWaldemar.Dither3D.Editor.Tests",
+    "rootNamespace": "",
+    "references": [
+        "MagisterWaldemar.Dither3D",
+        "MagisterWaldemar.Dither3D.Editor",
+        "UnityEngine.TestRunner",
+        "UnityEditor.TestRunner"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": true,
+    "precompiledReferences": [
+        "nunit.framework.dll"
+    ],
+    "autoReferenced": false,
+    "defineConstraints": [
+        "UNITY_INCLUDE_TESTS"
+    ],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
