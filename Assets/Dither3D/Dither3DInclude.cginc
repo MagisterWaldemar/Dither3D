@@ -199,18 +199,25 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
     // We inject a symmetric transfer term to introduce a third tone while preserving expected brightness.
     // Richness scales third-tone strength from 0 (near 2 steps) toward 1 (higher step counts).
     float richness = saturate((steps - 2.0) / POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE);
-    // Symmetric transfer peaks at mid-bin values and fades near bin edges to conserve expected brightness.
+    // Symmetric transfer peaks at mid-bin values and fades near bin edges.
+    // Expected brightness is preserved because transfer is added equally to low/high while mid is reduced by their sum.
     float lowTransfer = POINTILLISM_TRI_MIX_TRANSFER_SCALE * fracValue * (1.0 - fracValue) * richness;
     float lowProb = lowTransfer;
     float highProb = fracValue + lowTransfer;
     float midProb = max(0.0, 1.0 - lowProb - highProb);
 
-    if (lowIndex >= midIndex)
+    if (lowIndex >= midIndex && highIndex <= midIndex)
+    {
+        lowProb = 0.0;
+        highProb = 0.0;
+        midProb = 1.0;
+    }
+    else if (lowIndex >= midIndex)
     {
         midProb += lowProb;
         lowProb = 0.0;
     }
-    if (highIndex <= midIndex)
+    else if (highIndex <= midIndex)
     {
         midProb += highProb;
         highProb = 0.0;
@@ -308,7 +315,7 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
     fixed remappedSaturation = remappedMax - remappedMin;
     fixed desiredMinSaturation = sourceSaturation * POINTILLISM_CHROMA_PRESERVE_RATIO;
     fixed preserveAmount = step(POINTILLISM_MIN_CHROMA_PRESERVE_THRESHOLD, sourceSaturation) *
-                           saturate((desiredMinSaturation - remappedSaturation) / max(MIN_POINTILLISM_RANGE, desiredMinSaturation));
+                           saturate(max(0.0, desiredMinSaturation - remappedSaturation) / max(MIN_POINTILLISM_RANGE, desiredMinSaturation));
     remapped = lerp(remapped, clamped, preserveAmount);
 
     float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
