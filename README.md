@@ -1,543 +1,417 @@
 # Surface-Stable Fractal Dithering
 
-Surface-Stable Fractal Dithering is a novel form of dithering invented by Rune Skovbo Johansen for use on surfaces in 3D scenes.
-
-What's unique about it is that the dots in the dither patterns stick to surfaces, and yet the dot sizes and spacing remain approximately constant on the screen, even as surfaces move closer by or further away. This is achieved by dynamically adding or removing dots as needed.
+Surface-Stable Fractal Dithering is a novel dithering technique invented by Rune Skovbo Johansen for use on surfaces in 3D scenes. Dots stick to surfaces and maintain approximately constant screen-space size regardless of camera distance, achieved by dynamically adding or removing dots as the surface scales.
 
 Here's a video explaining how it works:
 
 [![Surface-Stable Fractal Dithering video on YouTube](https://img.youtube.com/vi/HPqGaIMVuLs/0.jpg)](https://www.youtube.com/watch?v=HPqGaIMVuLs)
 
-And here's a feature demo video (with music!) showing color RGB dithering, CMYK halftone, true 1-bit low-res effects, and much more:
+Feature demo (RGB dithering, CMYK halftone, 1-bit low-res, pointillism):
 
 [![Surface-Stable Fractal Dithering Demo video on YouTube](https://img.youtube.com/vi/EzjWBmhO_1E/0.jpg)](https://www.youtube.com/watch?v=EzjWBmhO_1E)
 
-This repository contains the shader and texture source files, and a Unity example project demonstrating their use. The example project is made with Unity 2019.4 and is also tested in Unity 2022.3 and Unity 6. The package includes Built-in RP shaders and a URP opaque shader variant.
+This repository contains shader and texture source files plus a Unity example project (Unity 2019.4, tested on 2022.3 and Unity 6). Includes Built-in RP shaders and a URP opaque variant.
 
-The core implementation is located in the folder `Assets/Dither3D`. The remaining files relate to the Unity example project.
+Core implementation is in `Assets/Dither3D`. The original repository: [https://github.com/runevision/Dither3D](https://github.com/runevision/Dither3D)
 
-The original version of this repository can be found at:  
-[https://github.com/runevision/Dither3D](https://github.com/runevision/Dither3D)
+---
 
-## Installation via Unity Package Manager
+## Installation
 
-You can install this package directly from Git using Unity Package Manager.
+### Via Unity Package Manager (recommended)
 
-1. Open **Unity Package Manager** (Window → Package Manager).
-2. Click the **+** button → **Add package from git URL…**
-3. Paste the following URL and click **Add**:
+1. Open **Window → Package Manager**
+2. Click **+** → **Add package from git URL…**
+3. Paste and click **Add**:
+   ```
+   https://github.com/MagisterWaldemar/Dither3D.git?path=/Assets/Dither3D
+   ```
 
-```
-https://github.com/MagisterWaldemar/Dither3D.git?path=/Assets/Dither3D
-```
+Requires Unity 2019.4 or later. Git must be installed on your system ([git-scm.com](https://git-scm.com)).
 
-Unity 2019.4 or later is required.
-
-> **Note:** Git must be installed on your system. Download from [https://git-scm.com](https://git-scm.com) and restart Unity if needed.
-
-To install a specific version tag (once tags are published), append `#<tag>`, e.g.:
+To pin a specific version tag once published:
 ```
 https://github.com/MagisterWaldemar/Dither3D.git?path=/Assets/Dither3D#1.0.0
 ```
 
-## How to Use
+### Manual
 
-### 1. Install the package
-
-Install via the **Unity Package Manager** as described in the [Installation](#installation-via-unity-package-manager) section above, or simply copy the `Assets/Dither3D` folder into your Unity project.
-
-### 2. Apply a Dither 3D shader to a material
-
-Dither 3D provides the following ready-to-use shaders:
-
-| Shader | Intended use |
-|---|---|
-| `Dither 3D/Opaque` | Standard opaque surfaces |
-| `Dither 3D/URP/Opaque` | URP opaque surfaces (Lit-style inputs) |
-| `Dither 3D/Cutout` | Alpha-tested (cutout) surfaces |
-| `Dither 3D/Particle Add` | Additive particle effects |
-| `Dither 3D/Skybox` | Skybox rendering |
-
-To apply dithering to a mesh or object:
-
-1. Select (or create) a material in the **Project** window.
-2. In the **Inspector**, click the **Shader** dropdown at the top of the material.
-3. Choose **Dither 3D → Opaque** (or whichever variant matches your use case).
-4. The material Inspector will now show the dither-specific properties (`Pattern`, `Dot Scale`, etc.).
-   The **Pattern** dropdown uses the `DitherPatternPropertyDrawer` editor extension, which automatically assigns the correct 3D dither texture and ramp texture for the chosen pattern size (`1×1`, `2×2`, `4×4`, or `8×8`).
-
-### Pipeline support matrix
-
-| Source pipeline/material | Recommended dither shader |
-|---|---|
-| Built-in RP `Standard` | `Dither 3D/Opaque` |
-| URP `Universal Render Pipeline/Lit` | `Dither 3D/URP/Opaque` |
-
-### 3. Convert an existing material to use dithering
-
-To switch an already-configured material (e.g., a Standard shader material) to dithering:
-
-1. Select the material in the **Project** window.
-2. In the **Inspector**, click the **Shader** dropdown and select **Dither 3D → Opaque** (or the appropriate variant).
-3. Re-assign your existing textures (`Albedo`, `Normal Map`, `Emission`, etc.) in the material Inspector — these properties are preserved with the same names where applicable.
-4. Adjust `Exposure` and `Offset` under **Dither Input Brightness** to match the previous brightness of the material.
-5. Select a **Pattern** size. Larger patterns (e.g. `8×8`) produce finer dot detail.
-
-URP migration (`Universal Render Pipeline/Lit` → `Dither 3D/URP/Opaque`) follows the same flow. Core target dither property names are (`_Color`, `_MainTex`, `_BumpMap`, `_EmissionMap`, `_EmissionColor`, `_Glossiness`, `_Metallic`), and the adapter maps URP Lit source properties (for example `_Smoothness`) to these targets.
-
-> **Batch prefab conversion:** Open **Tools → Dither 3D → Prefab Conversion** to run dry-run or real conversion on selected prefabs.  
-> - **Dry Run** computes deterministic output paths and a manifest preview with zero asset writes.  
-> - **Convert** writes generated converted materials, prefab variants, and a JSON conversion manifest report.
-> - **Prefab Preview panel** renders **Source vs Converted** side-by-side using in-memory conversion (no asset writes), includes a Source/Converted toggle, and surfaces unmapped-property warnings before committing conversion.
-
-> **Editor API note:** A deterministic editor-only `MaterialConverter` service is available for tool integrations. It converts one source material into a new dither material via `ShaderAdapterRegistry` + `DitherStyleProfile` rules, warns for unmapped properties, and does not guess implicit mappings.
-
-> **Pipeline-aware adapter bootstrap:**  
-> - Use `ShaderAdapterRegistry.CreatePrioritizedRegistryForActivePipeline()` for active-pipeline defaults (URP projects prefer `Dither 3D/URP/Opaque`; non-URP behavior is unchanged).  
-> - Use `ShaderAdapterRegistry.CreatePrioritizedNonUrpRegistry()` to force Built-in-only mappings.
->
-> Built-in-focused adapters include:
-> - `Nature/SpeedTree` → `Dither 3D/Cutout`
-> - `Nature/SpeedTree8` → `Dither 3D/Cutout`
-> - `Dither 3D/Particles (Alpha Blended)` → `Dither 3D/Particles (Additive)`
-> - URP adapter (pipeline-aware mode): `Universal Render Pipeline/Lit` → `Dither 3D/URP/Opaque` (falls back to `Dither 3D/Opaque` if URP shader is unavailable)
->
-> The particle adapter intentionally prioritizes preserving dithered particle readability over blend-mode parity, so the alpha-blended source is mapped to the additive target by design.
->
-> Each adapter includes documented supported/unsupported source properties. Unsupported properties are logged explicitly during conversion, and only explicitly declared property remaps are applied.
-
-### 4. Add the `Dither3DGlobalProperties` component
-
-Global settings such as **Color Mode** (Grayscale / RGB / CMYK), **Inverse Dots**, and **Radial Compensation** are controlled via the `Dither3DGlobalProperties` component:
-
-1. Select (or create) a GameObject in the scene — typically on a dedicated manager object or the main camera.
-2. Click **Add Component** and search for **Dither 3D Global Properties**.
-3. Configure the desired **Color Mode**, **Inverse Dots**, and other global toggles.
-4. The component automatically finds all materials in the project that use a Dither 3D shader (identified by the `_DitherTex` property) and propagates global shader keywords to them at runtime.
-
-The component also lets you override per-material properties (dot scale, contrast, etc.) for all dither materials at once, which is useful for global artistic adjustments or platform optimization.
+Copy the `Assets/Dither3D` folder into your Unity project.
 
 ---
 
-## Dither Properties
-
-Each material that uses the dithering has the following dither-specific number properties:
-
-**Dither Input Brightness**
-
-- `Exposure`  
-Exposure to apply to input brightness (default 1).
-- `Offset`  
-Offset to apply to input brightness (default 0).
-
-**Dither Settings**
-
-- `Dot Scale`  
-Value that exponentially scales the dots.
-- `Pattern Source`  
-`Bayer` (default, previous behavior) or `BlueNoiseFractal` (optional).
-- `Dot Size Variability`  
-0 = shading controls dot count "Bayer style" (default);  
-1 = shading controls dot sizes "half-tone style".
-- `Dot Contrast`  
-A value of 1 produces perfect anti-aliasing (default 1).
-- `Stretch Smoothness`  
-How much to smooth anisotropic dots (default 1).
-- `Blue Noise Rank Texture`  
-Optional tileable rank texture (0..1) used by `BlueNoiseFractal`.
-- `Blue Noise Phase Texture (Optional)`  
-Optional texture for extra temporal phase decorrelation.
-- `Blue Noise Phase Speed`  
-Rate of deterministic temporal phase evolution.
-- `Blue Noise Hysteresis`  
-Stickiness of the current phase before blending to the next.
-- `Blue Noise Min Dot`  
-Minimum-dot equivalent for maintaining small dots during motion.
-- `Enable Pointillism`
-Enables pointillist post-dither color stylization (default off, backwards compatible).
-- `Stroke Directionality`
-How strongly channel sampling is offset along an oriented stroke direction.
-- `Stroke Length`
-Length of directional stroke offsets used in pointillism ranking.
-- `Color Steps`
-Number of quantized lightness levels used for pointillism color assignment.
-- `Pointillism Color Model`
-`Legacy` preserves the previous luminance/HSL behavior. `OKLab` uses perceptual lightness quantization with chroma preservation (recommended).
-- `Pointillism Max Chroma (OKLab)`
-Maximum allowed OKLab chroma before conversion back to RGB, used to reduce clipping/artifacts in highly saturated regions.
-- `Pointillism Object Scale`
-Scale multiplier for object-space/triplanar pointillism coordinates.
-- `Pointillism Triplanar Sharpness`
-Blend sharpness for triplanar object-space coordinate mixing.
-- `Pointillism Coord Source`
-`UV` by default, with optional `AltUVHook`, `ObjectSpace`, and `TriplanarObjectSpace`.
-- `Clamp Min Color` / `Clamp Max Color`
-Per-channel output clamp range before color quantization.
-- `Pointillism LUT (Optional)` / `Pointillism LUT Blend`
-Optional LUT-driven color skew blended with pointillism output.
-- `Pointillism Composition Mode`
-`LegacyQuantized` keeps previous quantized remap behavior. `RoleComposed` enables painterly role-based ink composition (foundation/chroma/complement/highlight).
-- `Base Muting`
-How much the foundation role compresses chroma toward muted paint.
-- `Chroma Push`
-How strongly the chroma role exaggerates color intensity.
-- `Complementary Accent Amount`
-Maximum contribution allowed from sparse complementary accents.
-- `Accent Sparsity`
-Controls occupancy of complement/highlight accents (higher = fewer accents).
-- `Detail Sensitivity (Albedo)` / `Detail Sensitivity (Normal)`
-How strongly albedo gradients and normal variation redistribute role weights.
-- `Highlight Accent Strength`
-Controls highlight-role eligibility and max contribution in bright/specular regions.
-
-**Global Options**
-
-Furthermore, the following global toggle properties can be set via the `Dither3DGlobalProperties` component:
-
-- `Color Mode`  
-Can be set to Grayscale, RGB or CMYK. Grayscale converts the color to grayscale and runs the dithering once on that. RGB runs the dithering separately for the red, green and blue color channel. CMYK converts the color to CMYK, runs the dithering on each of those with traditional halftone rotations applied, and converts back to RGB.
-- `Inverse Dots`  
-For Grayscale and RGB, disabled produces bright dots on dark background (recommended) while enabled produces dark dots on light background. For CMYK, disabled produces dark dots on light background (like ink) while enabled produces light dots on dark background. Here, disabled works best if the shapes of the individual dots are clearly visible, but it can produce significant banding. For smaller dot sizes, enabled is recommended.
-- `Radial Compensation`  
-When using a perspective camera, dots must be larger towards the edge of the screen in order to be stable under camera rotation. The Radial Compensation feature can be enabled to achieve this.
-- `Quantize Layers`  
-When disabled, dots may grow or shrink in size when they appear or disappear, respectively. Even when enabled, dots may still be partially cut off, but that's a separate and unavoidable effect.
-- `Debug Fractal`  
-Displays debug overlays when enabled.  
-In grayscale mode, this shows fractal debug channels (U, V, and layer index) over the dither output.  
-When pointillism is enabled, it additionally shows coordinate-source debugging (UV/AltUV/ObjectSpace source colors, or triplanar XYZ blend weights as RGB).
-
-`Dither3DGlobalProperties` now also includes a temporal preset override for blue-noise mode:
-
-- `Conservative`  
-Slow phase evolution and high stickiness (best temporal stability for heavy motion/upscalers).
-- `Balanced` (default)  
-Middle-ground speed and stickiness.
-- `Aggressive`  
-Faster phase evolution and reduced stickiness (better for close/static shots).
-
-The `Dither3DGlobalProperties` component can also be used to override the non-global properties of all dither materials at once.
-
-`Dither3DGlobalProperties` also provides a dedicated pointillism preset override that groups stroke + palette + temporal tuning:
-
-- `Conservative`
-Lower stroke directionality/length, reduced color steps, slightly clamped palette, and high temporal stickiness.
-- `Balanced` (default)
-Middle-ground values across stroke, palette, and temporal controls.
-- `Aggressive`
-Higher stroke directionality/length, more color steps, and faster/lower-stickiness temporal response.
-
-## BlueNoiseFractal setup
-
-1. Keep existing Bayer workflow as-is (default behavior).  
-2. Generate blue-noise textures via **Tools → Dither 3D → Blue Noise Fractal Generator**.  
-3. Assign `Blue Noise Rank Texture` to the material.  
-4. (Optional) Generate and assign a `Blue Noise Phase Texture`.  
-5. Switch `Pattern Source` to `BlueNoiseFractal`.  
-6. Tune `Phase Speed`, `Hysteresis`, `Min Dot`, or use global temporal preset overrides.
-
-Generated blue-noise textures are imported with:
-- Linear (sRGB off)
-- No mipmaps
-- Uncompressed
-- Repeat wrap
-- Point filtering
-
-If a blue-noise rank texture is missing, shaders safely fallback to the Bayer path.
-
-## Pointillism setup
-
-1. Keep your existing material workflow unchanged (pointillism is opt-in and off by default).
-2. Choose pointillism rank source behavior:
-   - `Pattern Source = Bayer` (default): pointillism uses a stable non-temporal Bayer-derived rank.
-   - `Pattern Source = BlueNoiseFractal` + `Blue Noise Rank Texture`: pointillism uses blue-noise temporal rank controls.
-   - If `BlueNoiseFractal` is selected but rank texture is missing, pointillism safely falls back to the stable Bayer-derived rank.
-3. Enable `Pointillism` on the material.
-4. Tune `Stroke Directionality`, `Stroke Length`, and `Color Steps`.
-5. For painterly composition, switch `Pointillism Composition Mode` to `RoleComposed` and tune:
-   - `Base Muting`
-   - `Chroma Push`
-   - `Complementary Accent Amount`
-   - `Accent Sparsity`
-   - `Detail Sensitivity (Albedo/Normal)`
-   - `Highlight Accent Strength`
-6. Choose `Pointillism Coord Source`:
-   - `UV`: standard UV-anchored mode.
-   - `AltUVHook`: alternate UVs from `GetDither3DColorAltUV(...)`.
-   - `ObjectSpace`: uses object-space XZ projection.
-   - `TriplanarObjectSpace`: object-space triplanar blend for stretched/poor UVs.
-7. Set `Clamp Min/Max Color` to restrict palette range.
-8. (Optional) Assign `Pointillism LUT` and increase `Pointillism LUT Blend`.
-9. (Optional) Use **Tools → Dither 3D → Configure Pointillism LUT Import (Selected)** on LUT textures.
-10. For coordinate tuning, enable global `Debug Fractal`:
-   - UV source: light blue (0.1, 0.7, 1.0)
-   - AltUVHook source: golden yellow (1.0, 0.85, 0.1)
-   - ObjectSpace source: orange (1.0, 0.4, 0.1)
-   - TriplanarObjectSpace source: RGB = X/Y/Z blend weights
-
-Pointillism uses the same deterministic temporal phase/hysteresis controls when blue-noise rank is active (`Pattern Source = BlueNoiseFractal` with rank texture assigned), so conservative/balanced temporal presets also apply in that mode.
-You can also use the dedicated pointillism preset override in `Dither3DGlobalProperties` to set stroke/palette/temporal as one grouped choice.
-
-## Painterly validation tooling (8-step baseline workflow)
-
-Use **Tools → Dither 3D → Painterly Validation → Run Baseline Comparison + Capture**.
-
-What it does (deterministic, editor-only):
-1. Loads `PainterlyValidationSceneSet` (default asset included).
-2. Compares `LegacyQuantized` vs `RoleComposed` on the same scene/material set.
-3. Exports deterministic reports under `Assets/Dither3D/ValidationReports`:
-   - `PainterlyBaselineComparison.json`
-   - `PainterlyBaselineComparison.csv`
-   - `PainterlyBaselineComparison.txt`
-4. Emits deterministic capture placeholders under `Assets/Dither3D/ValidationReports/Captures`.
-5. Stores per-scene painterly material setting snapshots in the JSON report.
-6. Warns (does not hard fail) when scene/camera references are missing.
-7. Includes per-material fallback recommendations.
-8. Keeps exact/proxy labeling explicit for each reported metric.
-
-Validation scene-set artifact:
-- `Assets/Dither3D/Editor/DataModel/Validation/PainterlyValidationSceneSet.asset`
-- Categories included by default:
-  - low-chroma gradients
-  - high-frequency albedo
-  - strong-normal/low-albedo detail
-  - mixed highlights
-
-### Encoded tuning order (use this sequence)
-
-`foundation/chroma -> accent envelope -> accent sparsity -> detail sensitivities`
-
-Practical order mapping:
-1. **Foundation/Chroma**: `Base Muting`, `Chroma Push`
-2. **Accent Envelope**: `Complementary Accent Amount`, `Highlight Accent Strength`
-3. **Accent Sparsity**: `Accent Sparsity`
-4. **Detail Sensitivities**: `Detail Sensitivity (Albedo/Normal)`
-
-### Acceptance metrics tracked/exported per scene
-
-All metrics are currently labeled **Proxy** in report output:
-- role occupancy distribution (foundation/chroma/complement/highlight) — **Proxy**
-- accent sparsity/spatial placement quality — **Proxy**
-- mean color error vs target shading — **Proxy**
-- temporal role-flip stability frame-to-frame — **Proxy**
-
-## Safety fallback profile and criteria
-
-Use **Tools → Dither 3D → Painterly Validation → Apply Safety Fallback Profile (Selected Materials)** for a conservative RoleComposed fallback:
-- `Composition Mode = RoleComposed`
-- `Base Muting = 0.52`
-- `Chroma Push = 0.38`
-- `Complementary Accent Amount = 0.10`
-- `Accent Sparsity = 0.90`
-- `Detail Sensitivity (Albedo) = 0.75`
-- `Detail Sensitivity (Normal) = 0.70`
-- `Highlight Accent Strength = 0.15`
-- `Blue Noise Phase Speed / Hysteresis / Min Dot = 0.08 / 0.90 / 0.18`
-
-Fallback criteria:
-- **Flat palette content**: reduce accents first (`Complementary Accent Amount`, `Highlight Accent Strength`), keep high `Accent Sparsity`.
-- **Noisy textures / heavy micro-detail**: reduce detail sensitivities, then reduce accents.
-- **Specular-heavy content**: prefer switching `Pointillism Composition Mode` to `LegacyQuantized` when highlight popping persists.
-
-## Files
-
-A brief overview of the files in the `Assets/Dither3D` folder:
-
-The central shader include file with the dithering implementation:
-
-- `Dither3DInclude.cginc`
-
-Included shader files that use the dithering implementation:
-
-- `Dither3DOpaque.shader`
-- `Dither3DOpaqueURP.shader`
-- `Dither3DCutout.shader`
-- `Dither3DParticleAdd.shader`
-- `Dither3DSkybox.shader`
-
-The dither shaders rely on a 3D texture with dither patterns. These come in several versions with different amounts of dots. In the materials using the dither shaders, you can freely switch between these 3D textures.
-
-- `Dither3D_1x1.asset`
-- `Dither3D_2x2.asset`
-- `Dither3D_4x4.asset`
-- `Dither3D_8x8.asset`
-
-Although the 3D textures are available in the repository, a script is also included which can generate them from scratch. You can do this by using the menu items under the grouping `Assets/Create/Dither 3D Texture/...`. 
-
-- `Dither3DTextureMaker.cs`
-
-The script also generates PNG image files, where the different layers are laid out bottom to top. These PNG files are not used for anything and can be safely deleted, but they are easier to inspect and study than the native 3D textures. Note that later versions of Unity can in principle import 3D textures from such 2D images, but due to an inconsistency between Unity's 3D texture API and their 3D texture importer, the layers will appear in reverse order if this is attempted, and this will cause the fractal dithering effect to not work.
-
-- `Dither3D_1x1.png`
-- `Dither3D_2x2.png`
-- `Dither3D_4x4.png`
-- `Dither3D_8x8.png`
-
-Additional editor tooling for optional blue-noise rank/phase textures:
-
-- `Tools/Dither 3D/Blue Noise Fractal Generator`
-- `Tools/Dither 3D/Painterly Validation/Run Baseline Comparison + Capture`
-- `Tools/Dither 3D/Painterly Validation/Apply Safety Fallback Profile (Selected Materials)`
-
-## BlueNoiseFractal parameter quick table
-
-| Property | Suggested start (Balanced) | Notes |
-|---|---:|---|
-| Phase Speed | 0.15 | Lower for more temporal stability |
-| Hysteresis | 0.80 | Higher = more stickiness, less popping |
-| Min Dot | 0.12 | Higher helps preserve tiny dots in motion |
-
-## Pointillism parameter quick table
-
-| Property | Suggested start (Balanced) | Notes |
-|---|---:|---|
-| Enable Pointillism | On (per material) | Off by default for backward compatibility |
-| Stroke Directionality | 0.5 | Higher increases directional "stroke" feel |
-| Stroke Length | 0.4 | Higher extends channel offsets |
-| Blue Noise Stroke Mix | 0.3 | Blend between geometric surface direction and blue-noise-derived direction for stroke variation. |
-| Color Steps | 8 | Controls tonal palette density; pointillism now mixes up to three neighboring tone slots per pixel for richer color blending |
-| Pointillism Color Model | OKLab | Use OKLab for perceptual lightness quantization; Legacy keeps previous mode |
-| Pointillism Max Chroma (OKLab) | 0.32 | Lower values reduce saturation clipping and color-flip artifacts |
-| Perceptual HSL Mode | Off | When On, quantizes hue separately from luminance |
-| Hue Steps | 8 | Number of hue palette slots used in Perceptual HSL Mode |
-| Pointillism Coord Source | UV | UV / AltUVHook / ObjectSpace / TriplanarObjectSpace |
-| Object Scale | 1.0 | Scales object-space coordinate density |
-| Triplanar Sharpness | 4.0 | Higher = harder blend transitions between planes |
-| Clamp Min/Max Color | (0,0,0) / (1,1,1) | Narrow for palette-limited looks |
-| LUT Blend | 0.25 | Set 0 if no LUT is assigned |
-| Pointillism Composition Mode | LegacyQuantized (compat) / RoleComposed (painterly) | RoleComposed uses role-based probabilistic ink mixing with stable rank sampling |
-| Base Muting | 0.35 | Foundation ink chroma compression |
-| Chroma Push | 0.60 | Chroma-role exaggeration and redistribution gain |
-| Complementary Accent Amount | 0.20 | Max complement accent influence |
-| Accent Sparsity | 0.75 | Higher values reduce accent occupancy |
-| Detail Sensitivity (Albedo) | 1.00 | Albedo-gradient influence on role redistribution |
-| Detail Sensitivity (Normal) | 1.00 | Normal-variation influence on role redistribution |
-| Highlight Accent Strength | 0.35 | Highlight-role gating and maximum contribution |
-
-## Pointillism grouped preset quick table
-
-| Preset | Stroke Directionality | Stroke Length | Blue Noise Stroke Mix | Color Steps | Color Model | Max Chroma | Perceptual HSL Mode | Hue Steps | Clamp Range | Composition Mode | Base Muting | Chroma Push | Complement Accent | Accent Sparsity | Detail Sensitivity (A/N) | Highlight Accent | Phase Speed / Hysteresis / Min Dot |
-|---|---:|---:|---:|---:|---|---:|---|---:|---|---|---:|---:|---:|---:|---|---:|---|
-| Conservative | 0.35 | 0.25 | 0.15 | 6 | OKLab | 0.24 | Off | 6 | (0.05..0.95) | RoleComposed | 0.50 | 0.40 | 0.12 | 0.88 | 0.80 / 0.75 | 0.20 | 0.08 / 0.90 / 0.18 |
-| Balanced | 0.50 | 0.40 | 0.30 | 8 | OKLab | 0.32 | Off | 8 | (0..1) | RoleComposed | 0.35 | 0.60 | 0.20 | 0.75 | 1.00 / 1.00 | 0.35 | 0.15 / 0.80 / 0.12 |
-| Aggressive | 0.80 | 0.70 | 0.60 | 12 | OKLab | 0.40 | Off | 12 | (0..1) | RoleComposed | 0.22 | 1.20 | 0.45 | 0.55 | 1.35 / 1.40 | 0.70 | 0.45 / 0.45 / 0.04 |
-
-When **Pointillism Color Model** is set to **OKLab**, pointillism quantizes perceptual lightness while preserving chroma components and then clamps chroma to avoid saturation clipping artifacts. Lightness mixing can use up to three nearby tonal slots (rather than only two) for denser pointillist color perception.  
-When **Legacy** model is used with **Perceptual HSL Mode**, hue is quantized into fixed palette slots while luminance is dithered separately; in that legacy mode, **Color Steps** controls luminance levels and **Hue Steps** controls hue palette size.
-When **Pointillism Composition Mode** is set to **RoleComposed**, shader output is selected from role-defined inks (foundation/chroma/complement/highlight) using stable rank-based probabilistic selection. Role weights are normalized and constrained to keep expected output near the target shaded color while accents remain sparse and conditionally gated by detail/highlight signals.
-
-## Validation scenarios
-
-Use these when tuning temporal settings:
-
-1. Static object + whipping camera
-2. Moving/rotating object + static camera
-3. Thin geometry / high-frequency albedo
-4. UV-stretched mesh
-
-Expected result: Bayer mode remains unchanged; BlueNoiseFractal has reduced shimmer/pop when rank texture + conservative/balanced settings are used.
-With pointillism enabled, dot identity remains surface-anchored while color quantization/stroke directionality remains temporally stable under motion.
-
-## Risk and compatibility
-
-- Existing materials remain backward compatible because `Pattern Source` defaults to Bayer.
-- Existing `_DitherMode`, `_DitherTex`, and `_DitherRampTex` semantics are unchanged.
-- Blue-noise path is opt-in and has runtime fallback to Bayer when rank texture is not available.
-- Pointillism is opt-in (`Enable Pointillism` default = off) and safely degrades when optional LUT is missing (`LUT Blend` default = 0).
-- `Dither3DGlobalProperties` preset values are unchanged in this pass (tooling/docs focused update).
-
-## Known limitations
-
-- BlueNoiseFractal relies on generated rank textures and does not enforce strict mathematical fractal guarantees equivalent to Bayer matrices.
-- Optional phase texture set is generated as separate textures and must be assigned manually.
-- Object/triplanar pointillism coordinates are currently available on opaque/cutout surface shaders; other shader paths may still rely on UV/AltUV behavior.
-- Pointillism LUT expects a simple horizontal 1D-style mapping texture and currently applies per-channel remapping only.
-- Prefab preview conversion only mirrors shader/material remaps; it does not execute runtime scene effects (post-processing, global runtime scripts, light baking, or animation state machines) in the preview panel.
-- Preview rendering in the conversion window is editor-camera based and may not exactly match Game view output across pipelines/settings; use it as a fast preflight check before final Convert.
-- Painterly validation capture workflow currently emits deterministic placeholders by default; integrate real screenshot capture hooks per project camera rig as a follow-up if needed.
-
-## Practical painterly tuning recipes
-
-- **Low-chroma gradients**
-  - Start from `Conservative` pointillism preset.
-  - Keep `Base Muting` high (`0.45..0.60`), `Chroma Push` low (`0.30..0.55`).
-  - Keep accents sparse (`Accent Sparsity >= 0.85`).
-- **High-frequency albedo**
-  - Start from `Balanced`.
-  - Raise `Accent Sparsity` (`0.80..0.92`) before changing color steps.
-  - Lower `Detail Sensitivity (Albedo)` if accent noise appears.
-- **Strong-normal, low-albedo materials**
-  - Start from `Balanced` or `Conservative`.
-  - Keep `Detail Sensitivity (Normal)` moderate (`0.70..1.00`).
-  - Use lower `Highlight Accent Strength` for stability.
-- **Mixed highlights / specular-heavy**
-  - Start from `Conservative`.
-  - Lower `Highlight Accent Strength`, increase `Hysteresis`.
-  - If popping persists, switch to `LegacyQuantized`.
-
-Preset recommendations:
-- **Conservative**: heavy motion, TAA/upscaler-heavy content, specular-heavy scenes.
-- **Balanced (default)**: general gameplay and mixed lighting.
-- **Aggressive**: close/static shots where painterly accents are intentionally strong.
-
-## Troubleshooting (symptom -> control)
+## Available Shaders
+
+| Shader | Use case |
+|---|---|
+| `Dither 3D/Opaque` | Standard (Built-in RP) opaque surfaces |
+| `Dither 3D/URP/Opaque` | URP opaque surfaces |
+| `Dither 3D/Cutout` | Alpha-tested / cutout surfaces |
+| `Dither 3D/Particle Add` | Additive particle effects |
+| `Dither 3D/Skybox` | Skybox |
+
+---
+
+## Converting an Existing Material to Dither 3D
+
+### From Standard (Built-in RP)
+
+This is the most common starting point. The Dither 3D/Opaque shader is intentionally designed to mirror Standard shader properties.
+
+1. Select the material in the **Project** window.
+2. In the **Inspector**, click the **Shader** dropdown → **Dither 3D → Opaque**.
+3. Re-assign your textures. These properties carry over with the same names:
+   - `_MainTex` (Albedo)
+   - `_BumpMap` (Normal Map)
+   - `_EmissionMap` / `_EmissionColor`
+   - `_Metallic` / `_Glossiness`
+4. Under **Dither Input Brightness**, adjust `Exposure` and `Offset` to match the material's previous perceived brightness. Start with `Exposure = 1`, `Offset = 0` and tweak from there.
+5. Set a **Pattern** size in the material. `4×4` is a good general-purpose starting point. Larger patterns produce finer detail.
+
+> **If the material turns magenta**: you're using the URP shader on a Built-in RP project or vice versa. Switch to the pipeline-correct variant.
+
+### Batch Conversion via Prefab Tool
+
+For converting many materials at once, use **Tools → Dither 3D → Prefab Conversion**:
+
+- **Dry Run** — previews the conversion with no file writes and logs unmapped properties.
+- **Convert** — writes new materials, prefab variants, and a JSON manifest report.
+- **Prefab Preview panel** — side-by-side Source vs Converted view (in-memory, no writes) before committing.
+
+The converter uses `ShaderAdapterRegistry` + `DitherStyleProfile` rules. It only applies explicitly configured mappings — no implicit property guessing. Unmapped properties are logged with warnings.
+
+**Pipeline-aware adapter bootstrap:**
+- `ShaderAdapterRegistry.CreatePrioritizedRegistryForActivePipeline()` — auto-selects URP or Built-in adapters based on the active pipeline.
+- `ShaderAdapterRegistry.CreatePrioritizedNonUrpRegistry()` — forces Built-in-only mappings.
+
+Built-in adapters include:
+- `Standard` → `Dither 3D/Opaque`
+- `Nature/SpeedTree` / `Nature/SpeedTree8` → `Dither 3D/Cutout`
+- URP adapter: `Universal Render Pipeline/Lit` → `Dither 3D/URP/Opaque` (falls back to `Dither 3D/Opaque` if unavailable)
+
+### From URP Lit
+
+Same steps as above, but use **Dither 3D → URP/Opaque**. The URP adapter maps `_Smoothness` (URP name) to `_Glossiness` (Dither 3D name) automatically.
+
+---
+
+## Scene Setup: Dither3DGlobalProperties Component
+
+Before the dithering renders correctly, you need one `Dither3DGlobalProperties` component in the scene. Without it, global shader keywords won't be set and results will look wrong.
+
+1. Select any persistent GameObject (dedicated manager object or main camera).
+2. **Add Component** → search **Dither 3D Global Properties**.
+3. Set **Color Mode**:
+   - `Grayscale` — converts to grayscale, dithers once.
+   - `RGB` — dithers each channel separately (default for most use cases).
+   - `CMYK` — converts to CMYK, applies halftone rotations per channel, converts back. Produces a classic halftone print look.
+4. Leave other settings at defaults initially.
+
+The component automatically finds all materials using a Dither 3D shader (identified by the `_DitherTex` property) and propagates global keywords at runtime.
+
+---
+
+## Pointillism: Step-by-Step Setup
+
+Pointillism is an opt-in feature that replaces flat dither output with multi-ink painterly color composition. It's disabled by default and fully backward-compatible.
+
+### Step 1 — Enable Pointillism on the Material
+
+On your material's Inspector, check **Enable Pointillism**. You'll immediately see color quantization applied on top of the dither.
+
+### Step 2 — Choose a Color Model
+
+| Model | What it does |
+|---|---|
+| **OKLab** (recommended) | Quantizes perceptual lightness only. Hue and chroma are preserved. Uses a perceptually uniform color space so tonal steps feel even. |
+| **Legacy / Luminance** | Quantizes by standard luminance weights (0.299 R, 0.587 G, 0.114 B). Scales the original color to preserve hue. Simpler but less perceptually accurate. |
+| **Legacy / Perceptual HSL** | Quantizes hue and lightness independently. Controls hue via `Hue Steps` and lightness via `Color Steps`. |
+
+OKLab is recommended unless you specifically want the legacy look.
+
+With OKLab, also set **Pointillism Max Chroma**: lower values (e.g. `0.24`) reduce saturation clipping and color-flip artifacts in highly saturated areas. The default `0.32` is safe for most content.
+
+### Step 3 — Set Color Steps
+
+`Color Steps` controls how many discrete lightness/luminance levels exist in the quantized palette. More steps = more tones, less stylized, less visible banding.
+
+- `4–6`: Strong posterization, graphic look
+- `8` (default): Good balance
+- `12–16`: Subtle, closer to source
+
+The shader uses **trinary dithering** internally — it can blend between three adjacent tonal slots per pixel rather than just two, producing richer color transitions even at low step counts.
+
+### Step 4 — Choose a Coord Source
+
+The pointillism coordinate source determines what UV space is used for stroke direction sampling. Wrong coord source = smeared or swimming strokes.
+
+| Source | When to use |
+|---|---|
+| **UV** (default) | Well-UV-mapped surfaces. Strokes anchor to surface UV space. |
+| **ObjectSpace** | Surfaces with stretched or tiled UVs (e.g. terrain, rocks). Projects onto the XZ plane in object space. |
+| **TriplanarObjectSpace** | Heavily UV-distorted surfaces or any mesh without good UVs. Blends three planar projections weighted by surface normal. |
+| **AltUVHook** | Custom UV from code via `GetDither3DColorAltUV(...)`. |
+
+For `ObjectSpace` and `TriplanarObjectSpace`, adjust **Pointillism Object Scale** to control coordinate density (higher = more patterns per unit). For triplanar, **Triplanar Sharpness** controls how hard the transitions are between planes (default `4.0`; higher = sharper seams).
+
+### Step 5 — Tune Stroke Directionality
+
+Strokes are computed from screen-space UV derivatives. These two parameters control the "brushstroke" feel:
+
+- **Stroke Directionality** (`0–1`): How much the dither threshold samples are offset along the dominant UV derivative direction. `0` = circular dots, `1` = highly elongated strokes.
+- **Stroke Length** (`0–1`): How far the channel offset extends. Scales the spread of sample points.
+- **Blue Noise Stroke Mix** (`0–1`): Blends the derivative-based stroke direction with a random blue-noise angle. `0` = fully geometry-driven direction, `1` = fully random. Adds organic variation.
+
+Start with `Stroke Directionality = 0.5`, `Stroke Length = 0.4`, `Blue Noise Stroke Mix = 0.3`.
+
+### Step 6 — Choose a Composition Mode
+
+This is the most important decision for the final look:
+
+#### LegacyQuantized (default, simpler)
+Each pixel samples a single quantized color from the tone palette. No role system. Straightforward output, minimal tuning needed. Good starting point and safe fallback.
+
+#### RoleComposed (painterly)
+Each pixel is probabilistically assigned one of four "ink roles":
+
+| Role | What it looks like |
+|---|---|
+| **Foundation** | Desaturated base. `Base Muting` controls how much chroma is compressed toward grey. |
+| **Chroma** | Saturated base color. `Chroma Push` controls how much saturation is boosted above the source color. |
+| **Complement** | Opposite hue accent. Sparse. Requires sufficient chroma (> 0.05) and surface detail to activate. |
+| **Highlight** | Bright desaturated accent. Activates in bright areas and on high-detail surfaces. |
+
+The shader calculates weights for each role from the target color's OKLab representation, detail signals (screen-space albedo and normal gradients), and your tuning parameters. It then probabilistically selects one ink per pixel using the rank threshold, keeping expected output color close to the target shading.
+
+**Switching from LegacyQuantized to RoleComposed:**
+Apply the **Safety Fallback Profile** first as a starting point:
+- **Tools → Dither 3D → Painterly Validation → Apply Safety Fallback Profile (Selected Materials)**
+
+This sets conservative values that are stable across most content types. Tune from there.
+
+### Step 7 — Tune RoleComposed Parameters (in order)
+
+Tune in this sequence to avoid chasing artifacts:
+
+**1. Foundation/Chroma balance first:**
+- `Base Muting` (`0–1`): How much the foundation ink desaturates toward grey. `0.35` is balanced; `0.5+` makes the look more muted/earthy.
+- `Chroma Push` (`0–2`): How much the chroma ink boosts saturation above the source. `0.6` is balanced; above `1.0` produces highly saturated accent strokes.
+
+**2. Accent envelope:**
+- `Complementary Accent Amount` (`0–1`): Maximum contribution from the opposite-hue accent. `0` disables complements entirely. Keep low (`0.10–0.20`) to start.
+- `Highlight Accent Strength` (`0–1`): Controls how often and how strongly highlight inks appear in bright/specular regions. Lower for stability.
+
+**3. Accent sparsity:**
+- `Accent Sparsity` (`0–1`): Higher values = fewer accent pixels scattered across the surface. Start at `0.75`; raise to `0.85–0.92` if accents look noisy.
+
+**4. Detail sensitivities last:**
+- `Detail Sensitivity (Albedo)` (`0–2`): How strongly albedo gradients (detected via screen-space derivatives) redistribute weight toward accent roles. Lower this if noisy/high-frequency textures produce too much accent noise.
+- `Detail Sensitivity (Normal)` (`0–2`): Same but driven by normal map gradients. Useful for surfaces where shape detail should drive accent placement.
+
+### Step 8 — Color Clamping and LUT (Optional)
+
+- **Clamp Min/Max Color**: Restricts the output color range before composition. Useful for palette-limited looks (e.g. clamp max to `(0.9, 0.9, 0.9)` for a faded-print feel).
+- **Pointillism LUT**: A 1D lookup texture applied per-channel after composition. Lets you apply a color grade. Use **Tools → Dither 3D → Configure Pointillism LUT Import (Selected)** to set correct import settings on the texture. Set `LUT Blend = 0` if no LUT is assigned.
+
+---
+
+## Pointillism Debug Mode
+
+Enable **Debug Fractal** on the `Dither3DGlobalProperties` component to visualize coordinate sources:
+
+| Coord source | Debug color |
+|---|---|
+| UV | Light blue `(0.1, 0.7, 1.0)` |
+| AltUVHook | Golden yellow `(1.0, 0.85, 0.1)` |
+| ObjectSpace | Orange `(1.0, 0.4, 0.1)` |
+| TriplanarObjectSpace | RGB = X/Y/Z blend weights |
+
+Use this to confirm the right source is active and to diagnose swimming/smearing artifacts.
+
+---
+
+## Pointillism Preset Quick Reference
+
+Use these as starting points via the **Pointillism Preset Override** in `Dither3DGlobalProperties`, or apply them per-material manually.
+
+| Preset | Use case |
+|---|---|
+| **Conservative** | Heavy motion, TAA/upscaler scenes, specular-heavy content. Low stroke, reduced accents, high temporal stickiness. |
+| **Balanced** (default) | General gameplay, mixed lighting. Good middle-ground across all parameters. |
+| **Aggressive** | Close/static shots where strong painterly accents are intentional. High stroke, more color steps, faster temporal response. |
+
+Full parameter values:
+
+| Property | Conservative | Balanced | Aggressive |
+|---|---:|---:|---:|
+| Stroke Directionality | 0.35 | 0.50 | 0.80 |
+| Stroke Length | 0.25 | 0.40 | 0.70 |
+| Blue Noise Stroke Mix | 0.15 | 0.30 | 0.60 |
+| Color Steps | 6 | 8 | 12 |
+| Color Model | OKLab | OKLab | OKLab |
+| Max Chroma | 0.24 | 0.32 | 0.40 |
+| Clamp Range | 0.05–0.95 | 0–1 | 0–1 |
+| Composition Mode | RoleComposed | RoleComposed | RoleComposed |
+| Base Muting | 0.50 | 0.35 | 0.22 |
+| Chroma Push | 0.40 | 0.60 | 1.20 |
+| Complement Accent Amount | 0.12 | 0.20 | 0.45 |
+| Accent Sparsity | 0.88 | 0.75 | 0.55 |
+| Detail Sensitivity (Albedo/Normal) | 0.80/0.75 | 1.00/1.00 | 1.35/1.40 |
+| Highlight Accent Strength | 0.20 | 0.35 | 0.70 |
+| Phase Speed / Hysteresis / Min Dot | 0.08/0.90/0.18 | 0.15/0.80/0.12 | 0.45/0.45/0.04 |
+
+---
+
+## Pointillism Tuning by Content Type
+
+| Content | Starting preset | Key adjustments |
+|---|---|---|
+| Low-chroma gradients | Conservative | High `Base Muting` (0.45–0.60), low `Chroma Push` (0.30–0.55), `Accent Sparsity >= 0.85` |
+| High-frequency albedo (detailed textures) | Balanced | Raise `Accent Sparsity` to 0.80–0.92 first; lower `Detail Sensitivity (Albedo)` if accent noise persists |
+| Strong normals, low albedo (e.g. sculpted rock) | Balanced or Conservative | Keep `Detail Sensitivity (Normal)` at 0.70–1.00; lower `Highlight Accent Strength` for stability |
+| Specular-heavy / shiny materials | Conservative | Lower `Highlight Accent Strength`; increase `Hysteresis`; switch to `LegacyQuantized` if popping persists |
+| Flat stylized content | Conservative | High `Base Muting`, high `Accent Sparsity`; fall back to `LegacyQuantized` if over-stylized |
+
+---
+
+## Troubleshooting
 
 | Symptom | First control | Second control | Fallback |
 |---|---|---|---|
 | Accent flicker/pop in motion | Increase `Accent Sparsity` | Increase `Hysteresis`, lower `Phase Speed` | `Conservative` preset |
-| Over-saturated/blotchy accents | Lower `Chroma Push` | Lower `Complementary Accent Amount` | Safety fallback profile |
+| Over-saturated / blotchy accents | Lower `Chroma Push` | Lower `Complementary Accent Amount` | Safety fallback profile |
 | Highlight sparkle instability | Lower `Highlight Accent Strength` | Increase `Blue Noise Min Dot` | Switch to `LegacyQuantized` |
 | Detail-heavy surfaces look noisy | Lower `Detail Sensitivity (Albedo/Normal)` | Increase `Base Muting` | Reduce accents |
 | Flat content looks over-stylized | Increase `Base Muting` | Increase `Accent Sparsity` | `LegacyQuantized` |
-| Material turns magenta | Use pipeline-correct shader (`URP/Opaque` vs `Opaque`) | Re-import shader/material | N/A |
+| Strokes swim / don't anchor to surface | Check `Coord Source` matches UV layout | Use `ObjectSpace` or `TriplanarObjectSpace` | Enable Debug Fractal to diagnose |
+| Material turns magenta | Use pipeline-correct shader (`URP/Opaque` vs `Opaque`) | Re-import shader/material | — |
 
-## Next improvements
+---
 
-- Add direct support for phase texture arrays/atlases.
-- Extend runtime visual debug overlays to include phase blend and hysteresis response.
-- Upgrade painterly validation metrics from proxy-only to mixed exact+proxy where scene-render capture is available.
+## Basic Dithering (No Pointillism)
 
-### Material converter limitations and extension points
+The core dithering properties available on every Dither 3D material:
 
-Current limitations:
-- Conversion is rule-driven and only applies explicitly configured source-to-target mappings.
-- Rule behavior currently focuses on direct copy, scale/bias, float constant fallback, and explicit skip-with-warning.
-- Conversion tooling supports selected-prefab batch workflows and deterministic reporting, but still does not perform scene/build-wide discovery.
+**Dither Input Brightness**
+- `Exposure` — Multiplier on input brightness (default 1).
+- `Offset` — Additive offset on input brightness (default 0).
 
-Future extension points:
-- Add additional rule kinds for richer type transforms and multi-property composition.
-- Add prefab/scene batch conversion orchestration on top of the service.
-- Add richer preview inspection controls (for example diff overlays and renderer/slot filtering) on top of the current side-by-side preview.
+**Dither Settings**
+- `Dot Scale` — Exponentially scales dot size.
+- `Pattern` — `1×1`, `2×2`, `4×4`, `8×8`. Larger = finer dot detail.
+- `Pattern Source` — `Bayer` (default) or `BlueNoiseFractal` (requires generated rank texture).
+- `Dot Size Variability` — `0` = Bayer-style (shading controls dot count); `1` = halftone-style (shading controls dot size).
+- `Dot Contrast` — Anti-aliasing quality. Default `1` = perfect anti-aliasing.
+- `Stretch Smoothness` — Smoothing for anisotropic dots (default 1).
 
-## Discussion of surface-stable trait
+**Global Options (via Dither3DGlobalProperties)**
+- `Color Mode` — Grayscale / RGB / CMYK.
+- `Inverse Dots` — Flips dot polarity. For CMYK: disabled = dark ink on light (recommended). For RGB/Grayscale: disabled = bright dots on dark.
+- `Radial Compensation` — Enlarges dots toward screen edges to maintain stability under perspective camera rotation.
+- `Quantize Layers` — When enabled, prevents dots from smoothly growing/shrinking as they appear/disappear.
+- `Debug Fractal` — Enables debug overlays (grayscale: fractal channels; pointillism: coord source colors).
 
-Here is how I define surface-stable:
+---
 
-- A specific dot "sticks" to the surface whose shading it is part of, both under object movement and camera movement.
-- When a pattern is enlarged on the screen, for example due to zooming in on a surface, additional dots may be added to maintain the desired dot density, but no dots may be removed. Likewise, when a pattern shrinks on the screen, dots may be removed, but no dots may be added.
+## BlueNoiseFractal Setup (Optional)
 
-Conforming to the second constraint is in particular what is new in Surface-Stable Fractal Dithering. Approaches that fade between different scales of a pattern, which is not self-similar in the required way, will typically see dots both appearing and disappearing when zooming in.
+Blue noise pattern source reduces structured Bayer artifacts. Opt-in.
 
-### Bayer matrices
+1. Generate textures via **Tools → Dither 3D → Blue Noise Fractal Generator**.
+2. Assign the generated texture to `Blue Noise Rank Texture` on the material.
+3. Switch `Pattern Source` to `BlueNoiseFractal`.
+4. Optionally generate and assign a `Blue Noise Phase Texture` for extra temporal decorrelation.
+5. Tune `Phase Speed`, `Hysteresis`, `Min Dot` — or use the global **Temporal Preset Override** in `Dither3DGlobalProperties` (Conservative / Balanced / Aggressive).
 
-My implementation conforms to the second constraint by exploiting a certain "fractal" property of Bayer matrices, as explained in the video above.
+Generated textures must be imported as: Linear (sRGB off), No mipmaps, Uncompressed, Repeat wrap, Point filtering. The generator applies these settings automatically.
 
-### Other regular patterns
+If rank texture is missing, the shader silently falls back to Bayer.
 
-Some people have suggested using other regular patterns than Bayer for the dithering, based on triangles, hexes, square root 2 ratio rectangles, or similar. This should be relatively straightforward to implement for someone who so desires.
+| Property | Balanced start | Notes |
+|---|---:|---|
+| Phase Speed | 0.15 | Lower = more stable, less variation |
+| Hysteresis | 0.80 | Higher = more stickiness, less popping |
+| Min Dot | 0.12 | Higher preserves small dots during motion |
 
-### Blue noise patterns
+---
 
-Some people have suggested using blue noise for the pattern. But it is not straightforward to construct a blue noise pattern which is self-similar in a way that conforms to the second surface-stable constraint.
+## Painterly Validation Tooling
 
-If we use only a single tiled square of blue noise pattern, it would require the dots in each quadrant of the pattern, and each recursive quadrant of the pattern, to perfectly line up with dots in the full pattern, when scaled up to cover the same area as the full pattern.
+Use **Tools → Dither 3D → Painterly Validation → Run Baseline Comparison + Capture** to compare `LegacyQuantized` vs `RoleComposed` across reference scenes.
 
-Some people have pointed to the paper "Recursive Wang Tiles for Real-Time Blue Noise" by Johannes Kopf et al ([paper](https://johanneskopf.de/publications/blue_noise/paper/Recursive_Wang_Tiles_For_Real-Time_Blue_Noise.pdf) and [video](https://www.youtube.com/watch?v=ykACzjtR6rc)). While the paper describes their technique making use of self-similar blue noise patterns, the practical demonstration in the video shows dots fading both in and out while zooming in, so while I do not fully understand their technique in detail, it does not seem to conform to the second surface-stable constraint.
+Outputs to `Assets/Dither3D/ValidationReports`:
+- `PainterlyBaselineComparison.json` / `.csv` / `.txt`
+- Capture placeholders under `ValidationReports/Captures`
 
-I hope others will manage to construct a tiled blue-noise pattern with the required properties.
+Default validation scene-set (`PainterlyValidationSceneSet.asset`) includes: low-chroma gradients, high-frequency albedo, strong-normal/low-albedo detail, mixed highlights.
+
+**Tuning sequence:**
+1. Foundation/Chroma: `Base Muting`, `Chroma Push`
+2. Accent Envelope: `Complementary Accent Amount`, `Highlight Accent Strength`
+3. Accent Sparsity: `Accent Sparsity`
+4. Detail Sensitivities: `Detail Sensitivity (Albedo/Normal)`
+
+**Apply Safety Fallback Profile** (**Tools → Dither 3D → Painterly Validation → Apply Safety Fallback Profile (Selected Materials)**):
+```
+Composition Mode = RoleComposed
+Base Muting = 0.52 | Chroma Push = 0.38
+Complementary Accent Amount = 0.10 | Accent Sparsity = 0.90
+Detail Sensitivity (Albedo) = 0.75 | Detail Sensitivity (Normal) = 0.70
+Highlight Accent Strength = 0.15
+Phase Speed = 0.08 | Hysteresis = 0.90 | Min Dot = 0.18
+```
+
+---
+
+## Files Reference
+
+| File | Purpose |
+|---|---|
+| `Dither3DInclude.cginc` | Core shader include — all dithering and pointillism logic |
+| `Dither3DOpaque.shader` | Built-in RP opaque shader |
+| `Dither3DOpaqueURP.shader` | URP opaque shader |
+| `Dither3DCutout.shader` | Alpha-tested shader |
+| `Dither3DParticleAdd.shader` | Additive particle shader |
+| `Dither3DSkybox.shader` | Skybox shader |
+| `Dither3D_1x1/2x2/4x4/8x8.asset` | Pre-generated 3D dither pattern textures |
+| `Dither3D_1x1/2x2/4x4/8x8.png` | PNG previews of patterns (for inspection; not used by shaders) |
+| `Dither3DTextureMaker.cs` | Editor script to regenerate pattern textures from scratch |
+
+Regenerate 3D textures via **Assets → Create → Dither 3D Texture → …**
+
+> Do not import the PNG files as 3D textures in Unity — a Unity importer inconsistency reverses the layer order, which breaks the fractal effect.
+
+---
+
+## Known Limitations
+
+- `BlueNoiseFractal` uses generated rank textures and does not guarantee strict mathematical fractal self-similarity equivalent to Bayer matrices.
+- Object-space and triplanar pointillism coord sources are only available on opaque/cutout surface shaders.
+- Pointillism LUT expects a simple horizontal 1D-style texture and applies per-channel remapping only (no 3D LUT).
+- Prefab preview conversion does not run post-processing, lighting, or animation — use it as a fast preflight check only.
+- Painterly validation capture emits deterministic placeholders by default; real screenshot capture requires per-project camera rig integration.
+
+---
+
+## Discussion: What "Surface-Stable" Means
+
+A dither pattern is surface-stable when:
+1. Each dot sticks to the surface it belongs to — under both object and camera movement.
+2. When the surface scales larger on screen (zoom in), dots may be *added* but never removed. When it scales smaller, dots may be *removed* but never added.
+
+The second constraint is what's new here. Most scale-fading dither approaches violate it by having dots both appear and disappear during zoom. This implementation satisfies it by exploiting a fractal property of Bayer matrices — each quadrant of a Bayer matrix contains a valid sub-set of the full matrix, enabling dots to appear hierarchically.
+
+The `BlueNoiseFractal` mode approximates this using generated rank textures, but does not guarantee strict mathematical fractal self-similarity.
+
+### Other Pattern Types
+
+- **Regular non-Bayer patterns** (triangles, hexes, √2 rectangles): straightforward to implement, no fundamental obstacles.
+- **True blue-noise patterns**: not straightforward. Requires a self-similar blue-noise pattern where dots in each recursive quadrant align with dots in the full pattern. The "Recursive Wang Tiles" paper approximates this but does not appear to fully satisfy the second constraint.
+
+---
 
 ## License
 
-This Surface-Stable Fractal Dithering implementation is licensed under the [Mozilla Public License, v. 2.0](https://mozilla.org/MPL/2.0/).
+Licensed under the [Mozilla Public License, v. 2.0](https://mozilla.org/MPL/2.0/).
 
-You can read a summary [here](https://choosealicense.com/licenses/mpl-2.0/). In short: If you make changes/improvements to this Surface-Stable Fractal Dithering implementation, you must share those for free with the community. But the rest of the source code for your game or application is not subject to this license, so there's nothing preventing you from creating proprietary and commercial games that use this Surface-Stable Fractal Dithering implementation.
+In short: changes/improvements to this implementation must be shared freely. The rest of your game or application source code is not subject to this license. Commercial and proprietary games using this implementation are permitted.
