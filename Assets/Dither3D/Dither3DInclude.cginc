@@ -54,6 +54,14 @@ float _PointillismLUTBlend;
 float _PointillismCoordSource;
 float _PointillismObjectScale;
 float _PointillismTriplanarSharpness;
+float _PointillismCompositionMode;
+float _PointillismBaseMuting;
+float _PointillismChromaPush;
+float _PointillismComplementaryAccentAmount;
+float _PointillismAccentSparsity;
+float _PointillismDetailSensitivityAlbedo;
+float _PointillismDetailSensitivityNormal;
+float _PointillismHighlightAccentStrength;
 
 float2 HashBlueNoiseOffset(float n)
 {
@@ -84,10 +92,40 @@ static const float POINTILLISM_TRI_MIX_RICHNESS_STEP_RANGE = 10.0;
 static const float POINTILLISM_TRI_MIX_TRANSFER_SCALE = 0.5;
 static const float PATTERN_SOURCE_BLUENOISE_THRESHOLD = 0.5;
 static const float POINTILLISM_COLORMODE_OKLAB_THRESHOLD = 0.5;
+static const float POINTILLISM_COMPOSITIONMODE_ROLE_THRESHOLD = 0.5;
 static const fixed3 POINTILLISM_SOURCE_VIS_UV = fixed3(0.1, 0.7, 1.0);
 static const fixed3 POINTILLISM_SOURCE_VIS_ALT_UV = fixed3(1.0, 0.85, 0.1);
 static const fixed3 POINTILLISM_SOURCE_VIS_OBJECT = fixed3(1.0, 0.4, 0.1);
 static const float POINTILLISM_DEBUG_BLEND = 0.7;
+static const float POINTILLISM_ACCENT_MAX_WEIGHT = 0.35;
+static const float POINTILLISM_HIGHLIGHT_MAX_WEIGHT = 0.30;
+static const float POINTILLISM_DETAIL_GRADIENT_SCALE = 8.0;
+static const float POINTILLISM_DETAIL_NORMAL_SCALE = 2.5;
+static const float POINTILLISM_DETAIL_ALBEDO_WEIGHT = 0.6;
+static const float POINTILLISM_DETAIL_NORMAL_WEIGHT = 0.4;
+static const float POINTILLISM_HIGHLIGHT_LIGHTNESS_THRESHOLD = 0.6;
+static const float POINTILLISM_HIGHLIGHT_LIGHTNESS_SCALE = 2.5;
+static const float POINTILLISM_HIGHLIGHT_NORMAL_WEIGHT = 0.4;
+static const float POINTILLISM_HIGHLIGHT_ALBEDO_WEIGHT = 0.2;
+static const float POINTILLISM_MAX_ACCENT_WEIGHT_SUM = 0.9;
+static const float POINTILLISM_FOUNDATION_MUTING_SCALE = 0.9;
+static const float POINTILLISM_CHROMA_PUSH_SCALE = 0.8;
+static const float POINTILLISM_CHROMA_DETAIL_SCALE = 0.3;
+static const float POINTILLISM_COMPLEMENT_BASE_SCALE = 0.55;
+static const float POINTILLISM_COMPLEMENT_PUSH_SCALE = 0.45;
+static const float POINTILLISM_COMPLEMENT_LIGHTNESS_BASE = 0.92;
+static const float POINTILLISM_COMPLEMENT_LIGHTNESS_DETAIL_SCALE = 0.12;
+static const float POINTILLISM_HIGHLIGHT_LIGHTNESS_BOOST = 0.24;
+static const float POINTILLISM_HIGHLIGHT_CHROMA_REDUCTION = 0.55;
+static const float POINTILLISM_COMPLEMENT_CHROMA_THRESHOLD = 0.05;
+static const float POINTILLISM_COMPLEMENT_DETAIL_THRESHOLD = 0.12;
+static const float POINTILLISM_HIGHLIGHT_SIGNAL_THRESHOLD = 0.08;
+static const float POINTILLISM_HIGHLIGHT_SPARSITY_OCCUPANCY_SCALE = 0.8;
+static const float POINTILLISM_HIGHLIGHT_SPARSE_PHASE_OFFSET = 0.43;
+static const float POINTILLISM_COMPLEMENT_CAP_BASE_WEIGHT = 0.3;
+static const float POINTILLISM_COMPLEMENT_CAP_SIGNAL_WEIGHT = 0.7;
+static const float POINTILLISM_HIGHLIGHT_CAP_BASE_WEIGHT = 0.4;
+static const float POINTILLISM_HIGHLIGHT_CAP_SIGNAL_WEIGHT = 0.6;
 
 fixed SampleTemporalRankWithFallback(float2 uvBlue, float phaseOffset)
 {
@@ -238,13 +276,8 @@ float ResolvePointillismTrinaryQuantizedValue(float normalizedValue, float steps
     return chosenIndex / maxStepIndex;
 }
 
-fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 worldNormal, float hasWorldData, fixed3 color)
+fixed ComputePointillismTriRank(float2 uvPointillism, float2 dx, float2 dy, float3 worldNormal, float hasWorldData)
 {
-    fixed3 clampMin = saturate(_PointillismClampMinColor.rgb);
-    fixed3 clampMax = max(clampMin, saturate(_PointillismClampMaxColor.rgb));
-    fixed3 clampRange = max(fixed3(MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE), clampMax - clampMin);
-    fixed3 clamped = clamp(color, clampMin, clampMax);
-
     float2 orthoDir = ResolvePointillismStrokeDirection(dx, dy, worldNormal, hasWorldData);
     fixed blueAngleRaw = SampleTemporalRankWithFallback(frac(uvPointillism), 0.5);
     float blueAngle = blueAngleRaw * 6.28318530718;
@@ -264,9 +297,12 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
     fixed rank = SamplePointillismRank(rankUvA);
     fixed rankSecondary = SamplePointillismRank(rankUvB);
     // Blend two decorrelated rank samples to reduce repeated two-tone pairings.
-    fixed triRank = frac(rank * POINTILLISM_RANK_PRIMARY_WEIGHT + rankSecondary * POINTILLISM_RANK_SECONDARY_WEIGHT);
-    fixed3 remapped = clamped;
+    return frac(rank * POINTILLISM_RANK_PRIMARY_WEIGHT + rankSecondary * POINTILLISM_RANK_SECONDARY_WEIGHT);
+}
 
+fixed3 ApplyPointillismColorLegacy(fixed3 clamped, fixed3 clampMin, fixed3 clampMax, fixed3 clampRange, fixed triRank)
+{
+    fixed3 remapped = clamped;
     if (_PointillismColorModel > POINTILLISM_COLORMODE_OKLAB_THRESHOLD)
     {
         float3 lab = RGBtoOKLab(clamped);
@@ -319,6 +355,141 @@ fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 
     fixed preserveAmount = step(POINTILLISM_MIN_CHROMA_PRESERVE_THRESHOLD, sourceSaturation) *
                            saturate(max(0.0, desiredMinSaturation - remappedSaturation) / max(MIN_POINTILLISM_RANGE, desiredMinSaturation));
     remapped = lerp(remapped, clamped, preserveAmount);
+    return remapped;
+}
+
+fixed3 ApplyPointillismColorComposed(float3 targetColor, fixed triRank, float2 dx, float2 dy, float3 worldNormal, float hasWorldData)
+{
+    float3 targetLab = RGBtoOKLab(targetColor);
+    float2 chromaVec = targetLab.yz;
+    float chroma = length(chromaVec);
+    float maxChroma = max(MIN_POINTILLISM_RANGE, _PointillismMaxChroma);
+    float2 chromaDir = chroma > MIN_POINTILLISM_RANGE ? chromaVec / chroma : float2(1.0, 0.0);
+    float chromaNorm = saturate(chroma / maxChroma);
+
+    float baseMuting = saturate(_PointillismBaseMuting);
+    float chromaPush = clamp(_PointillismChromaPush, 0.0, 2.0);
+    float complementAmount = saturate(_PointillismComplementaryAccentAmount);
+    float accentSparsity = saturate(_PointillismAccentSparsity);
+    float detailSensitivityAlbedo = clamp(_PointillismDetailSensitivityAlbedo, 0.0, 2.0);
+    float detailSensitivityNormal = clamp(_PointillismDetailSensitivityNormal, 0.0, 2.0);
+    float highlightStrength = saturate(_PointillismHighlightAccentStrength);
+
+    float albedoGradient = saturate((length(ddx(targetColor)) + length(ddy(targetColor))) * POINTILLISM_DETAIL_GRADIENT_SCALE * detailSensitivityAlbedo);
+    float normalVariation = 0.0;
+    if (hasWorldData > 0.5)
+        normalVariation = saturate((length(ddx(worldNormal)) + length(ddy(worldNormal))) * POINTILLISM_DETAIL_NORMAL_SCALE * detailSensitivityNormal);
+    float detailSignal = saturate(
+        POINTILLISM_DETAIL_ALBEDO_WEIGHT * albedoGradient +
+        POINTILLISM_DETAIL_NORMAL_WEIGHT * normalVariation
+    );
+
+    float lightness = targetLab.x;
+    float highlightSignal = saturate(
+        (lightness - POINTILLISM_HIGHLIGHT_LIGHTNESS_THRESHOLD) * POINTILLISM_HIGHLIGHT_LIGHTNESS_SCALE +
+        normalVariation * POINTILLISM_HIGHLIGHT_NORMAL_WEIGHT +
+        albedoGradient * POINTILLISM_HIGHLIGHT_ALBEDO_WEIGHT
+    );
+
+    float3 foundationLab = targetLab;
+    foundationLab.yz *= (1.0 - POINTILLISM_FOUNDATION_MUTING_SCALE * baseMuting);
+
+    float3 chromaLab = targetLab;
+    chromaLab.yz *= (1.0 + POINTILLISM_CHROMA_PUSH_SCALE * chromaPush + POINTILLISM_CHROMA_DETAIL_SCALE * detailSignal);
+
+    float3 complementLab = targetLab;
+    float complementMagnitude = chroma * (POINTILLISM_COMPLEMENT_BASE_SCALE + POINTILLISM_COMPLEMENT_PUSH_SCALE * chromaPush);
+    complementLab.yz = -chromaDir * complementMagnitude;
+    complementLab.x = saturate(targetLab.x * (POINTILLISM_COMPLEMENT_LIGHTNESS_BASE + POINTILLISM_COMPLEMENT_LIGHTNESS_DETAIL_SCALE * detailSignal));
+
+    float3 highlightLab = targetLab;
+    highlightLab.x = saturate(targetLab.x + POINTILLISM_HIGHLIGHT_LIGHTNESS_BOOST * highlightStrength);
+    highlightLab.yz *= (1.0 - POINTILLISM_HIGHLIGHT_CHROMA_REDUCTION * highlightStrength);
+
+    float3 foundationInk = saturate(OKLabToRGB(foundationLab));
+    float3 chromaInk = saturate(OKLabToRGB(chromaLab));
+    float3 complementInk = saturate(OKLabToRGB(complementLab));
+    float3 highlightInk = saturate(OKLabToRGB(highlightLab));
+
+    float complementEligible = step(POINTILLISM_COMPLEMENT_CHROMA_THRESHOLD, chromaNorm) * step(POINTILLISM_COMPLEMENT_DETAIL_THRESHOLD, detailSignal);
+    float highlightEligible = step(POINTILLISM_HIGHLIGHT_SIGNAL_THRESHOLD, highlightSignal);
+    float sparseTarget = saturate(1.0 - accentSparsity);
+    float complementSparseMask = step(1.0 - sparseTarget, triRank);
+    float highlightSparseMask = step(1.0 - sparseTarget * POINTILLISM_HIGHLIGHT_SPARSITY_OCCUPANCY_SCALE, frac(triRank + POINTILLISM_HIGHLIGHT_SPARSE_PHASE_OFFSET));
+
+    float complementCap = POINTILLISM_ACCENT_MAX_WEIGHT * complementAmount * complementEligible * complementSparseMask *
+        (POINTILLISM_COMPLEMENT_CAP_BASE_WEIGHT + POINTILLISM_COMPLEMENT_CAP_SIGNAL_WEIGHT * detailSignal);
+    float highlightCap = POINTILLISM_HIGHLIGHT_MAX_WEIGHT * highlightStrength * highlightEligible * highlightSparseMask *
+        (POINTILLISM_HIGHLIGHT_CAP_BASE_WEIGHT + POINTILLISM_HIGHLIGHT_CAP_SIGNAL_WEIGHT * highlightSignal);
+
+    float3 baseDelta = chromaInk - foundationInk;
+    float baseDenom = max(MIN_POINTILLISM_RANGE, dot(baseDelta, baseDelta));
+    float chromaWeightBase = saturate(dot(targetColor - foundationInk, baseDelta) / baseDenom);
+    float3 baseMix = lerp(foundationInk, chromaInk, chromaWeightBase);
+
+    float3 complementDelta = complementInk - baseMix;
+    float complementDenom = max(MIN_POINTILLISM_RANGE, dot(complementDelta, complementDelta));
+    float complementRawWeight = saturate(dot(targetColor - baseMix, complementDelta) / complementDenom);
+
+    float3 highlightDelta = highlightInk - baseMix;
+    float highlightDenom = max(MIN_POINTILLISM_RANGE, dot(highlightDelta, highlightDelta));
+    float highlightRawWeight = saturate(dot(targetColor - baseMix, highlightDelta) / highlightDenom);
+
+    float complementWeightCapped = min(complementRawWeight, complementCap);
+    float highlightWeightCapped = min(highlightRawWeight, highlightCap);
+    float accentWeightSum = complementWeightCapped + highlightWeightCapped;
+    if (accentWeightSum > POINTILLISM_MAX_ACCENT_WEIGHT_SUM)
+    {
+        float accentScale = POINTILLISM_MAX_ACCENT_WEIGHT_SUM / accentWeightSum;
+        complementWeightCapped *= accentScale;
+        highlightWeightCapped *= accentScale;
+    }
+
+    float baseRemaining = max(MIN_POINTILLISM_RANGE, 1.0 - complementWeightCapped - highlightWeightCapped);
+    float3 baseTarget = (targetColor - complementWeightCapped * complementInk - highlightWeightCapped * highlightInk) / baseRemaining;
+    float chromaWeightRefined = saturate(dot(baseTarget - foundationInk, baseDelta) / baseDenom);
+    chromaWeightRefined = saturate(chromaWeightRefined + detailSignal * 0.12 * chromaPush);
+    float foundationWeightRaw = (1.0 - chromaWeightRefined) * baseRemaining;
+    float chromaWeightRaw = chromaWeightRefined * baseRemaining;
+
+    float foundationWeightCapped = foundationWeightRaw;
+    float chromaWeightCapped = chromaWeightRaw;
+
+    float weightSum = max(
+        MIN_POINTILLISM_RANGE,
+        foundationWeightCapped + chromaWeightCapped + complementWeightCapped + highlightWeightCapped
+    );
+    float foundationWeight = foundationWeightCapped / weightSum;
+    float chromaWeight = chromaWeightCapped / weightSum;
+    float complementWeight = complementWeightCapped / weightSum;
+    float highlightWeight = highlightWeightCapped / weightSum;
+
+    float cdfFoundation = foundationWeight;
+    float cdfChroma = cdfFoundation + chromaWeight;
+    float cdfComplement = cdfChroma + complementWeight;
+
+    if (triRank < cdfFoundation)
+        return foundationInk;
+    if (triRank < cdfChroma)
+        return chromaInk;
+    if (triRank < cdfComplement)
+        return complementInk;
+    return highlightInk;
+}
+
+fixed3 ApplyPointillismColor(float2 uvPointillism, float2 dx, float2 dy, float3 worldNormal, float hasWorldData, fixed3 color)
+{
+    fixed3 clampMin = saturate(_PointillismClampMinColor.rgb);
+    fixed3 clampMax = max(clampMin, saturate(_PointillismClampMaxColor.rgb));
+    fixed3 clampRange = max(fixed3(MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE, MIN_POINTILLISM_RANGE), clampMax - clampMin);
+    fixed3 clamped = clamp(color, clampMin, clampMax);
+    fixed triRank = ComputePointillismTriRank(uvPointillism, dx, dy, worldNormal, hasWorldData);
+
+    fixed3 remapped = _PointillismCompositionMode > POINTILLISM_COMPOSITIONMODE_ROLE_THRESHOLD
+        ? ApplyPointillismColorComposed(clamped, triRank, dx, dy, worldNormal, hasWorldData)
+        : ApplyPointillismColorLegacy(clamped, clampMin, clampMax, clampRange, triRank);
+
+    remapped = clamp(remapped, clampMin, clampMax);
 
     float hasLut = step(MIN_VALID_TEXTURE_SIZE, _PointillismLUTTex_TexelSize.z);
     float lutBlend = saturate(_PointillismLUTBlend) * hasLut;

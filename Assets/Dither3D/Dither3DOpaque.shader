@@ -56,6 +56,14 @@ Shader "Dither 3D/Opaque"
         _PointillismClampMaxColor ("Clamp Max Color", Color) = (1,1,1,1)
         _PointillismLUTTex ("Pointillism LUT (Optional)", 2D) = "white" {}
         _PointillismLUTBlend ("Pointillism LUT Blend", Range(0,1)) = 0
+        [Enum(LegacyQuantized,0,RoleComposed,1)] _PointillismCompositionMode ("Pointillism Composition Mode", Float) = 0
+        _PointillismBaseMuting ("Base Muting", Range(0,1)) = 0.35
+        _PointillismChromaPush ("Chroma Push", Range(0,2)) = 0.6
+        _PointillismComplementaryAccentAmount ("Complementary Accent Amount", Range(0,1)) = 0.2
+        _PointillismAccentSparsity ("Accent Sparsity", Range(0,1)) = 0.75
+        _PointillismDetailSensitivityAlbedo ("Detail Sensitivity (Albedo)", Range(0,2)) = 1
+        _PointillismDetailSensitivityNormal ("Detail Sensitivity (Normal)", Range(0,2)) = 1
+        _PointillismHighlightAccentStrength ("Highlight Accent Strength", Range(0,1)) = 0.35
     }
     SubShader
     {

@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c3af34e0f2e04b0c8c5e95a2e0d2fd11, type: 3}
+  m_Name: PainterlyValidationSceneSet
+  m_EditorClassIdentifier: 
+  scenes:
+  - label: LowChromaGradients
+    category: low-chroma gradients
+    scenePath: Assets/Scenes/TestGradient/TestGradient.unity
+    cameraName: Main Camera
+    notes: Gradient-focused scene for foundation/chroma envelope checks.
+    materialPaths:
+    - Assets/Scenes/TestGradient/TestGradientDither.mat
+    - Assets/Scenes/TestGradient/TestGradientRaw.mat
+  - label: HighFrequencyAlbedo
+    category: high-frequency albedo
+    scenePath: Assets/Scenes/PerspectiveRow.unity
+    cameraName: Main Camera
+    notes: Tile detail scene for accent placement noise checks.
+    materialPaths:
+    - Assets/Materials/Dither3DTiles.mat
+  - label: StrongNormalLowAlbedo
+    category: strong-normal low-albedo detail
+    scenePath: Assets/Scenes/RotatingScene.unity
+    cameraName: Main Camera
+    notes: Normal-driven detail scene for role redistribution sensitivity.
+    materialPaths:
+    - Assets/Materials/Dither3D.mat
+  - label: MixedHighlights
+    category: mixed highlights
+    scenePath: Assets/Scenes/RotatingLight.unity
+    cameraName: Main Camera
+    notes: Highlight/specular stress scene for accent gating robustness.
+    materialPaths:
+    - Assets/Materials/Dither3D_LargeDots.mat
+  sharedMaterialPaths:
+  - Assets/Materials/Dither3D.mat
+  - Assets/Materials/Dither3DTiles.mat
+  - Assets/Materials/Dither3D_LargeDots.mat
