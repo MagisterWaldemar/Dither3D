@@ -278,6 +278,67 @@ If a blue-noise rank texture is missing, shaders safely fallback to the Bayer pa
 Pointillism uses the same deterministic temporal phase/hysteresis controls when blue-noise rank is active (`Pattern Source = BlueNoiseFractal` with rank texture assigned), so conservative/balanced temporal presets also apply in that mode.
 You can also use the dedicated pointillism preset override in `Dither3DGlobalProperties` to set stroke/palette/temporal as one grouped choice.
 
+## Painterly validation tooling (8-step baseline workflow)
+
+Use **Tools → Dither 3D → Painterly Validation → Run Baseline Comparison + Capture**.
+
+What it does (deterministic, editor-only):
+1. Loads `PainterlyValidationSceneSet` (default asset included).
+2. Compares `LegacyQuantized` vs `RoleComposed` on the same scene/material set.
+3. Exports deterministic reports under `Assets/Dither3D/ValidationReports`:
+   - `PainterlyBaselineComparison.json`
+   - `PainterlyBaselineComparison.csv`
+   - `PainterlyBaselineComparison.txt`
+4. Emits deterministic capture placeholders under `Assets/Dither3D/ValidationReports/Captures`.
+5. Stores per-scene painterly material setting snapshots in the JSON report.
+6. Warns (does not hard fail) when scene/camera references are missing.
+7. Includes per-material fallback recommendations.
+8. Keeps exact/proxy labeling explicit for each reported metric.
+
+Validation scene-set artifact:
+- `Assets/Dither3D/Editor/DataModel/Validation/PainterlyValidationSceneSet.asset`
+- Categories included by default:
+  - low-chroma gradients
+  - high-frequency albedo
+  - strong-normal/low-albedo detail
+  - mixed highlights
+
+### Encoded tuning order (use this sequence)
+
+`foundation/chroma -> accent envelope -> accent sparsity -> detail sensitivities`
+
+Practical order mapping:
+1. **Foundation/Chroma**: `Base Muting`, `Chroma Push`
+2. **Accent Envelope**: `Complementary Accent Amount`, `Highlight Accent Strength`
+3. **Accent Sparsity**: `Accent Sparsity`
+4. **Detail Sensitivities**: `Detail Sensitivity (Albedo/Normal)`
+
+### Acceptance metrics tracked/exported per scene
+
+All metrics are currently labeled **Proxy** in report output:
+- role occupancy distribution (foundation/chroma/complement/highlight) — **Proxy**
+- accent sparsity/spatial placement quality — **Proxy**
+- mean color error vs target shading — **Proxy**
+- temporal role-flip stability frame-to-frame — **Proxy**
+
+## Safety fallback profile and criteria
+
+Use **Tools → Dither 3D → Painterly Validation → Apply Safety Fallback Profile (Selected Materials)** for a conservative RoleComposed fallback:
+- `Composition Mode = RoleComposed`
+- `Base Muting = 0.52`
+- `Chroma Push = 0.38`
+- `Complementary Accent Amount = 0.10`
+- `Accent Sparsity = 0.90`
+- `Detail Sensitivity (Albedo) = 0.75`
+- `Detail Sensitivity (Normal) = 0.70`
+- `Highlight Accent Strength = 0.15`
+- `Blue Noise Phase Speed / Hysteresis / Min Dot = 0.08 / 0.90 / 0.18`
+
+Fallback criteria:
+- **Flat palette content**: reduce accents first (`Complementary Accent Amount`, `Highlight Accent Strength`), keep high `Accent Sparsity`.
+- **Noisy textures / heavy micro-detail**: reduce detail sensitivities, then reduce accents.
+- **Specular-heavy content**: prefer switching `Pointillism Composition Mode` to `LegacyQuantized` when highlight popping persists.
+
 ## Files
 
 A brief overview of the files in the `Assets/Dither3D` folder:
@@ -315,6 +376,8 @@ The script also generates PNG image files, where the different layers are laid o
 Additional editor tooling for optional blue-noise rank/phase textures:
 
 - `Tools/Dither 3D/Blue Noise Fractal Generator`
+- `Tools/Dither 3D/Painterly Validation/Run Baseline Comparison + Capture`
+- `Tools/Dither 3D/Painterly Validation/Apply Safety Fallback Profile (Selected Materials)`
 
 ## BlueNoiseFractal parameter quick table
 
@@ -381,6 +444,7 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 - Existing `_DitherMode`, `_DitherTex`, and `_DitherRampTex` semantics are unchanged.
 - Blue-noise path is opt-in and has runtime fallback to Bayer when rank texture is not available.
 - Pointillism is opt-in (`Enable Pointillism` default = off) and safely degrades when optional LUT is missing (`LUT Blend` default = 0).
+- `Dither3DGlobalProperties` preset values are unchanged in this pass (tooling/docs focused update).
 
 ## Known limitations
 
@@ -390,15 +454,48 @@ With pointillism enabled, dot identity remains surface-anchored while color quan
 - Pointillism LUT expects a simple horizontal 1D-style mapping texture and currently applies per-channel remapping only.
 - Prefab preview conversion only mirrors shader/material remaps; it does not execute runtime scene effects (post-processing, global runtime scripts, light baking, or animation state machines) in the preview panel.
 - Preview rendering in the conversion window is editor-camera based and may not exactly match Game view output across pipelines/settings; use it as a fast preflight check before final Convert.
+- Painterly validation capture workflow currently emits deterministic placeholders by default; integrate real screenshot capture hooks per project camera rig as a follow-up if needed.
 
-## Troubleshooting
+## Practical painterly tuning recipes
 
-- **Material turns magenta:** This usually means a pipeline/shader mismatch (for example, using a Built-in shader in URP, or a URP shader without URP available). For URP projects use `Dither 3D/URP/Opaque`; for Built-in projects use `Dither 3D/Opaque`.
+- **Low-chroma gradients**
+  - Start from `Conservative` pointillism preset.
+  - Keep `Base Muting` high (`0.45..0.60`), `Chroma Push` low (`0.30..0.55`).
+  - Keep accents sparse (`Accent Sparsity >= 0.85`).
+- **High-frequency albedo**
+  - Start from `Balanced`.
+  - Raise `Accent Sparsity` (`0.80..0.92`) before changing color steps.
+  - Lower `Detail Sensitivity (Albedo)` if accent noise appears.
+- **Strong-normal, low-albedo materials**
+  - Start from `Balanced` or `Conservative`.
+  - Keep `Detail Sensitivity (Normal)` moderate (`0.70..1.00`).
+  - Use lower `Highlight Accent Strength` for stability.
+- **Mixed highlights / specular-heavy**
+  - Start from `Conservative`.
+  - Lower `Highlight Accent Strength`, increase `Hysteresis`.
+  - If popping persists, switch to `LegacyQuantized`.
+
+Preset recommendations:
+- **Conservative**: heavy motion, TAA/upscaler-heavy content, specular-heavy scenes.
+- **Balanced (default)**: general gameplay and mixed lighting.
+- **Aggressive**: close/static shots where painterly accents are intentionally strong.
+
+## Troubleshooting (symptom -> control)
+
+| Symptom | First control | Second control | Fallback |
+|---|---|---|---|
+| Accent flicker/pop in motion | Increase `Accent Sparsity` | Increase `Hysteresis`, lower `Phase Speed` | `Conservative` preset |
+| Over-saturated/blotchy accents | Lower `Chroma Push` | Lower `Complementary Accent Amount` | Safety fallback profile |
+| Highlight sparkle instability | Lower `Highlight Accent Strength` | Increase `Blue Noise Min Dot` | Switch to `LegacyQuantized` |
+| Detail-heavy surfaces look noisy | Lower `Detail Sensitivity (Albedo/Normal)` | Increase `Base Muting` | Reduce accents |
+| Flat content looks over-stylized | Increase `Base Muting` | Increase `Accent Sparsity` | `LegacyQuantized` |
+| Material turns magenta | Use pipeline-correct shader (`URP/Opaque` vs `Opaque`) | Re-import shader/material | N/A |
 
 ## Next improvements
 
 - Add direct support for phase texture arrays/atlases.
 - Extend runtime visual debug overlays to include phase blend and hysteresis response.
+- Upgrade painterly validation metrics from proxy-only to mixed exact+proxy where scene-render capture is available.
 
 ### Material converter limitations and extension points
 
