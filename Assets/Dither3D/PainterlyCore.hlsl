@@ -1,17 +1,15 @@
 /*
  * PainterlyCore.hlsl — Multi-layer pointillist rendering core.
  *
- * Uses the existing Dither3D Bayer fractal textures for surface-stable dot
- * placement, but replaces the single-threshold dithering with a 4-layer
- * paint simulation:
+ * Uses procedural hexagonal-grid circular dots for a true pointillist look.
+ * Four paint layers are composited with soft blending:
  *   Layer 0  Shadow    — dark tones, warm/cool shifted
  *   Layer 1  Body      — source color, chroma boosted
  *   Layer 2  Highlight — bright tones, desaturated
  *   Layer 3  Accent    — complementary hue, sparse
  *
- * Each layer uses a rotated UV so dots from different layers do not overlap,
- * producing the side-by-side color mix characteristic of pointillism.
- * Layers are composited with painter's algorithm (last on top).
+ * Each layer uses a rotated UV so dots from different layers sit side by side,
+ * producing the optical color mix characteristic of pointillism.
  *
  * Required material properties (must be declared in CBUFFER_START before
  * this file is included):
@@ -25,15 +23,13 @@
 #define PAINTERLY_CORE_INCLUDED
 
 // ═══════════════════════════════════════════════════════════════════
-//  TEXTURE DECLARATIONS
+//  TEXTURE DECLARATIONS  (kept for material property compatibility)
 // ═══════════════════════════════════════════════════════════════════
 
 TEXTURE3D(_DitherTex);
 SAMPLER(sampler_DitherTex);
 TEXTURE2D(_DitherRampTex);
 SAMPLER(sampler_DitherRampTex);
-
-// Engine-provided — not in UnityPerMaterial CBUFFER.
 float4 _DitherTex_TexelSize;
 
 // ═══════════════════════════════════════════════════════════════════
@@ -41,16 +37,13 @@ float4 _DitherTex_TexelSize;
 // ═══════════════════════════════════════════════════════════════════
 
 static const float PAINTERLY_EPS = 0.0001;
+static const float PAINTERLY_SQ3 = 1.7320508;
 
 // Per-layer UV rotation (sin, cos).  Different angles prevent dot overlap.
 static const float2 LAYER_ROT_SHADOW    = float2( 0.50000, 0.86603);  // 30 deg
 static const float2 LAYER_ROT_BODY      = float2( 0.00000, 1.00000);  //  0 deg
 static const float2 LAYER_ROT_HIGHLIGHT = float2( 0.86603, 0.50000);  // 60 deg
 static const float2 LAYER_ROT_ACCENT    = float2( 0.70711, 0.70711);  // 45 deg
-
-// Hard-coded size-variability — mostly density-driven, tiny size variation
-// for a natural painterly feel.  0 = pure density, 1 = pure size.
-static const float PAINTERLY_SIZE_VAR = 0.15;
 
 // ═══════════════════════════════════════════════════════════════════
 //  OKLab COLOUR SPACE
@@ -82,21 +75,15 @@ float3 PainterlyOKLabToRGB(float3 lab)
         -0.0041960863, -0.7034186147,  1.7076147010), lms);
 }
 
-// Gamut-aware soft clamp: when an OKLab colour maps to out-of-gamut RGB,
-// reduce chroma toward the achromatic axis (preserving lightness and hue)
-// instead of independently clipping R, G, B which shifts hue.
 float3 PainterlyOKLabToRGBSafe(float3 lab)
 {
     float3 rgb = PainterlyOKLabToRGB(lab);
 
-    // If already in gamut, return immediately.
     float lo = min(rgb.r, min(rgb.g, rgb.b));
     float hi = max(rgb.r, max(rgb.g, rgb.b));
     if (lo >= 0.0 && hi <= 1.0)
         return rgb;
 
-    // Binary-search bisect chroma toward the grey axis (lab.x, 0, 0).
-    // 5 iterations give < 3% chroma error — visually imperceptible.
     float tLo = 0.0;
     float tHi = 1.0;
     float3 grey = float3(lab.x, 0.0, 0.0);
@@ -110,9 +97,9 @@ float3 PainterlyOKLabToRGBSafe(float3 lab)
         float cLo    = min(c.r, min(c.g, c.b));
         float cHi    = max(c.r, max(c.g, c.b));
         if (cLo < 0.0 || cHi > 1.0)
-            tLo = tMid;   // still out of gamut — reduce chroma more
+            tLo = tMid;
         else
-            tHi = tMid;   // in gamut — try keeping more chroma
+            tHi = tMid;
     }
 
     return saturate(PainterlyOKLabToRGB(lerp(lab, grey, tHi)));
@@ -124,99 +111,80 @@ float3 PainterlyOKLabToRGBSafe(float3 lab)
 
 float2 PainterlyRotateUV(float2 uv, float2 sc)
 {
-    // sc = (sin(angle), cos(angle))
     return float2(uv.x * sc.y - uv.y * sc.x,
                   uv.x * sc.x + uv.y * sc.y);
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  SURFACE-STABLE DOT FIELD  (shared SVD result)
+//  HASH FUNCTIONS  (for per-dot variation & jitter)
 // ═══════════════════════════════════════════════════════════════════
 
-struct DotField
+float PainterlyHash21(float2 p)
 {
-    float baseSpacing;
-    float baseContrast;
-    float dotsTotal;
-    float invXres;
-    float invZres;
-};
+    p = frac(p * float2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return frac(p.x * p.y);
+}
 
-DotField ComputeDotField(float2 dx, float2 dy)
+float2 PainterlyHash22(float2 p)
 {
-    DotField df;
-
-    float xRes     = _DitherTex_TexelSize.z;
-    df.invXres     = _DitherTex_TexelSize.x;
-    float dps      = xRes / 16.0;            // dots-per-side
-    df.dotsTotal   = dps * dps;
-    df.invZres     = 1.0 / df.dotsTotal;
-
-    // SVD of the 2×2 Jacobian [dx ; dy].
-    float4 v       = float4(dx, dy);
-    float  Q       = dot(v, v);
-    float  R       = dx.x * dy.y - dx.y * dy.x;
-    float  disc    = sqrt(max(0.0, Q * Q - 4.0 * R * R));
-    float2 freq    = sqrt(max(PAINTERLY_EPS, float2(Q + disc, Q - disc)) * 0.5);
-
-    float scaleExp = exp2(_DotScale);
-    df.baseSpacing = freq.y * scaleExp * dps * 0.125;
-
-    df.baseContrast = _DotSharpness * scaleExp * 0.1;
-    // Reduce contrast when the surface is highly stretched to prevent aliasing.
-    df.baseContrast *= pow(max(PAINTERLY_EPS, freq.y) /
-                           max(PAINTERLY_EPS, freq.x), 1.0);
-
-    return df;
+    return float2(PainterlyHash21(p),
+                  PainterlyHash21(p + 37.0));
 }
 
 // ═══════════════════════════════════════════════════════════════════
-//  SINGLE DOT-LAYER SAMPLE
+//  HEX-GRID CIRCULAR DOT LAYER
 //
-//  Returns a value in [0,1].   > 0.5 → dot present (ink)
-//                                < 0.5 → gap    (canvas)
-//  Soft edges around 0.5 provide natural anti-aliasing.
+//  Returns a soft mask in [0,1].  1 = inside dot, 0 = canvas gap.
+//  Uses a hexagonal grid for natural dot packing and antialiased
+//  distance-field circles for proper round dots.
 // ═══════════════════════════════════════════════════════════════════
 
-float SampleDotLayer(float2 layerUV, DotField df, float density)
+float SampleDotLayer(float2 uv, float cellSize, float density,
+                     float aaPixelSize, float jitterAmt)
 {
-    // Early-out: nothing to draw.
     if (density < 0.005)
         return 0.0;
     density = saturate(density);
 
-    // Brightness-ramp linearises the threshold→coverage relationship.
-    float2 rampCoord = float2(
-        0.5 * df.invXres + (1.0 - df.invXres) * density, 0.5);
-    float bCurve = SAMPLE_TEXTURE2D(_DitherRampTex, sampler_DitherRampTex,
-                                     rampCoord).r;
+    // Scale UV into cell-normalised coordinates.
+    float2 scaled = uv / cellSize;
 
-    // Spacing adjustment (size-variability ≈ 0.15).
-    float spMul    = pow(max(0.001, bCurve * 2.0 + 0.001),
-                         -(1.0 - PAINTERLY_SIZE_VAR));
-    float spacing  = df.baseSpacing * spMul;
+    // Hexagonal grid: two staggered rectangular sublattices.
+    float2 cellDim = float2(1.0, PAINTERLY_SQ3);
 
-    // Fractal level.
-    float sLog     = log2(max(PAINTERLY_EPS, spacing));
-    int   level    = (int)floor(sLog);
-    float fracPart = sLog - (float)level;
+    float2 idA     = floor(scaled / cellDim);
+    float2 centerA = (idA + 0.5) * cellDim;
+    float2 offA    = scaled - centerA;
 
-    float2 scaledUV = layerUV / exp2((float)level);
+    float2 shifted = scaled - float2(0.5, PAINTERLY_SQ3 * 0.5);
+    float2 idB     = floor(shifted / cellDim);
+    float2 centerB = (idB + 0.5) * cellDim + float2(0.5, PAINTERLY_SQ3 * 0.5);
+    float2 offB    = scaled - centerB;
 
-    // Sub-layer (z in 3-D texture).
-    float subLayer = lerp(0.25 * df.dotsTotal, df.dotsTotal, 1.0 - fracPart);
-    subLayer       = (subLayer - 0.5) * df.invZres;
+    // Pick the nearest hex center.
+    bool   useA   = dot(offA, offA) < dot(offB, offB);
+    float2 off    = useA ? offA : offB;
+    float2 cellId = useA ? idA : (idB + float2(1000.5, 1000.5));
 
-    // Bayer fractal sample.
-    float pattern  = SAMPLE_TEXTURE3D(_DitherTex, sampler_DitherTex,
-                                       float3(scaledUV, subLayer)).r;
+    // Per-dot position jitter for a hand-painted feel.
+    float2 jitter = (PainterlyHash22(cellId) - 0.5) * jitterAmt;
+    off -= jitter;
 
-    // Threshold & contrast → soft binary mask.
-    float threshold = 1.0 - bCurve;
-    float contrast  = df.baseContrast * spMul;
-    float baseVal   = lerp(0.5, density, saturate(1.05 / (1.0 + contrast)));
+    // Per-dot size variation (+-15%).
+    float sizeVar = lerp(0.85, 1.15, PainterlyHash21(cellId + 7.0));
 
-    return saturate((pattern - threshold) * contrast + baseVal);
+    // Dot radius — area proportional to density (sqrt for radius).
+    float maxR = 0.52;   // slightly > 0.5 so full-density dots touch
+    float r    = maxR * sqrt(density) * sizeVar;
+
+    float dist = length(off);
+
+    // Anti-aliasing width: thinner at higher _DotSharpness.
+    float aa = aaPixelSize / max(_DotSharpness, 0.2);
+    aa = max(aa, 0.015);  // minimum softness for smooth edges
+
+    return 1.0 - smoothstep(r - aa, r + aa, dist);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -243,29 +211,29 @@ PaintPalette GeneratePalette(half3 color)
 
     PaintPalette p;
 
-    // ── Shadow ───────────────────────────────────────────────────
+    // -- Shadow -------------------------------------------------------
     float sL = max(0.0, L - _ValueSpread * 0.4);
     float sH = hue + _WarmCool * 0.4;
     float sC = C * max(0.2, 1.0 - _ValueSpread * 0.3);
     p.shadow = half3(PainterlyOKLabToRGBSafe(
                    float3(sL, sC * cos(sH), sC * sin(sH))));
 
-    // ── Body ─────────────────────────────────────────────────────
+    // -- Body ---------------------------------------------------------
     float bC = C * _Chroma;
     p.body = half3(PainterlyOKLabToRGBSafe(
                    float3(L, bC * cos(hue), bC * sin(hue))));
 
-    // ── Highlight ────────────────────────────────────────────────
+    // -- Highlight ----------------------------------------------------
     float hL = min(1.0, L + _ValueSpread * 0.3);
     float hH = hue - _WarmCool * 0.2;
     float hC = C * max(0.1, 1.0 - _ValueSpread * 0.5);
     p.highlight = half3(PainterlyOKLabToRGBSafe(
                        float3(hL, hC * cos(hH), hC * sin(hH))));
 
-    // ── Accent ───────────────────────────────────────────────────
+    // -- Accent -------------------------------------------------------
     float aH = hue + 3.14159265 + _HueShift * 6.28318;
-    float aC = C * 0.45;
-    float aL = clamp(L * 0.8 + 0.1, 0.0, 1.0);
+    float aC = C * 0.6;
+    float aL = clamp(L * 0.85 + 0.1, 0.0, 1.0);
     p.accent = half3(PainterlyOKLabToRGBSafe(
                    float3(aL, aC * cos(aH), aC * sin(aH))));
 
@@ -281,74 +249,70 @@ PaintPalette GeneratePalette(half3 color)
 
 half3 PainterlyComposite(float2 uv, float2 dx, float2 dy, half3 litColor)
 {
-    // ── Exposure ─────────────────────────────────────────────────
+    // -- Exposure -----------------------------------------------------
     litColor = saturate(litColor * _Exposure);
 
     // Perceptual lightness drives per-layer density.
     float brightness = PainterlyRGBtoOKLab(litColor).x;
 
-    // ── Palette ──────────────────────────────────────────────────
+    // -- Palette ------------------------------------------------------
     PaintPalette pal = GeneratePalette(litColor);
 
-    // ── Shared dot-field (one SVD for all layers) ────────────────
-    DotField df = ComputeDotField(dx, dy);
+    // -- Dot sizing ---------------------------------------------------
+    // Cell size in UV space — dots are surface-stable.
+    float cellSize = _DotScale * 0.004;
 
-    // ── Per-layer rotated UVs ────────────────────────────────────
+    // AA width: size of one pixel in cell-normalised coordinates.
+    float pixelUV    = (length(dx) + length(dy)) * 0.5;
+    float aaPixelSize = pixelUV / max(cellSize, PAINTERLY_EPS);
+
+    float jitter = 0.15;
+
+    // -- Per-layer rotated UVs ----------------------------------------
     float2 uvShadow    = PainterlyRotateUV(uv, LAYER_ROT_SHADOW);
-    float2 uvBody      = uv;   // no rotation
+    float2 uvBody      = uv;
     float2 uvHighlight = PainterlyRotateUV(uv, LAYER_ROT_HIGHLIGHT);
     float2 uvAccent    = PainterlyRotateUV(uv, LAYER_ROT_ACCENT);
 
-    // ── Layer densities (smoothstep for soft transitions) ────────
-    float shadowDen    = smoothstep(0.65, 0.0,  brightness) * 0.85;
-    float bodyDen      = smoothstep(0.0,  0.35, brightness)
-                       * smoothstep(1.0,  0.55, brightness) * 0.75;
-    float highlightDen = smoothstep(0.3,  0.85, brightness) * 0.70;
-    float accentDen    = _AccentAmount * 0.18
-                       * smoothstep(0.15, 0.45, brightness)
-                       * smoothstep(0.85, 0.55, brightness);
+    // -- Layer densities (smoothstep for soft transitions) ------------
+    float shadowDen    = smoothstep(0.6, 0.05, brightness) * 0.75;
+    float bodyDen      = smoothstep(0.0,  0.25, brightness)
+                       * smoothstep(1.0,  0.50, brightness) * 0.65;
+    float highlightDen = smoothstep(0.35, 0.80, brightness) * 0.60;
+    float accentDen    = _AccentAmount
+                       * smoothstep(0.15, 0.40, brightness)
+                       * smoothstep(0.85, 0.50, brightness);
 
-    // Canvas visibility scales total ink down in bright areas.
-    float inkScale = 1.0 - _CanvasShow * brightness * 0.7;
+    // Canvas visibility — reduce ink in bright areas to show canvas.
+    float inkScale = 1.0 - _CanvasShow * brightness * 0.5;
     shadowDen    *= inkScale;
     bodyDen      *= inkScale;
     highlightDen *= inkScale;
 
-    // ── Sample each layer ────────────────────────────────────────
-    float shadowDot    = SampleDotLayer(uvShadow,    df, shadowDen);
-    float bodyDot      = SampleDotLayer(uvBody,      df, bodyDen);
-    float highlightDot = SampleDotLayer(uvHighlight, df, highlightDen);
-    float accentDot    = SampleDotLayer(uvAccent,    df, accentDen);
+    // -- Sample each dot layer ----------------------------------------
+    float shadowDot    = SampleDotLayer(uvShadow,    cellSize, shadowDen,
+                                        aaPixelSize, jitter);
+    float bodyDot      = SampleDotLayer(uvBody,      cellSize, bodyDen,
+                                        aaPixelSize, jitter);
+    float highlightDot = SampleDotLayer(uvHighlight, cellSize, highlightDen,
+                                        aaPixelSize, jitter);
+    float accentDot    = SampleDotLayer(uvAccent,    cellSize, accentDen,
+                                        aaPixelSize, jitter);
 
-    // ── Painter's algorithm (last layer on top) ──────────────────
+    // -- Painter's algorithm (soft blend, last layer on top) ----------
     half3 result = _CanvasColor.rgb;
-    float topDot = 0.0;
+    result = lerp(result, pal.shadow,    shadowDot);
+    result = lerp(result, pal.body,      bodyDot);
+    result = lerp(result, pal.highlight, highlightDot);
+    result = lerp(result, pal.accent,    accentDot);
 
-    // Shadow (bottom)
-    float sMask = step(0.5, shadowDot);
-    result = lerp(result, pal.shadow, sMask);
-    topDot = lerp(topDot, shadowDot, sMask);
-
-    // Body
-    float bMask = step(0.5, bodyDot);
-    result = lerp(result, pal.body, bMask);
-    topDot = lerp(topDot, bodyDot, bMask);
-
-    // Highlight
-    float hMask = step(0.5, highlightDot);
-    result = lerp(result, pal.highlight, hMask);
-    topDot = lerp(topDot, highlightDot, hMask);
-
-    // Accent (top)
-    float aMask = step(0.5, accentDot);
-    result = lerp(result, pal.accent, aMask);
-    topDot = lerp(topDot, accentDot, aMask);
-
-    // ── Impasto (simulated paint thickness) ──────────────────────
-    float anyDot    = saturate(sMask + bMask + hMask + aMask);
-    float center    = saturate((topDot - 0.5) * 3.0); // 0 at edge, 1 at centre
+    // -- Impasto (simulated paint thickness) --------------------------
+    float anyDot  = saturate(shadowDot + bodyDot + highlightDot + accentDot);
+    float topDot  = max(max(shadowDot, bodyDot),
+                        max(highlightDot, accentDot));
+    float center  = topDot;   // 0 at edge, 1 at dot centre
     float impastoFx = 1.0 + _Impasto
-                    * (center * 0.15 - (1.0 - center) * 0.10) * anyDot;
+                    * (center * 0.15 - (1.0 - center) * 0.08) * anyDot;
     result *= impastoFx;
 
     return saturate(result);

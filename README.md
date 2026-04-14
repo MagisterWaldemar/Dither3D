@@ -52,6 +52,75 @@ Copy the `Assets/Dither3D` folder into your Unity project.
 
 ---
 
+## Painterly Pointillist: Quick Setup
+
+The `Dither 3D/URP/Painterly Pointillist` shader renders surfaces as round painted dots on a canvas, using four overlapping color layers — shadow, body, highlight, and accent — to simulate the optical color mixing of pointillist painting. It is a self-contained URP shader with its own simple parameter set; no Dither3DGlobalProperties component is needed.
+
+### Step 1 — Assign the shader
+
+Select your material → **Shader** dropdown → **Dither 3D → URP → Painterly Pointillist**.
+
+Assign your Albedo and Normal Map textures as normal. Dots appear immediately.
+
+### Step 2 — Set dot size
+
+**Dot Scale** (`2–10`, default `5`): controls dot size. Higher = larger, fewer visible dots. Start at `5`.
+
+**Dot Sharpness** (`0.2–3.0`, default `1.2`): controls edge hardness. Lower = soft blended edges. Higher = crisp round dots. Leave at default unless you have a specific preference.
+
+### Step 3 — Tune the paint colors
+
+These drive how the four color layers are derived from the lit surface:
+
+| Property | Default | Effect |
+|---|---:|---|
+| **Exposure** | 1.0 | Brightens or darkens the input before painting. Raise for dark scenes, lower if blown out. |
+| **Value Spread** | 0.3 | Lightness gap between shadow and highlight dots vs. the body. Higher = more tonal contrast across layers. |
+| **Chroma** | 1.2 | Saturation boost on body (mid-tone) dots. `1.0` = no boost. `1.5+` gives vivid color. |
+| **Shadow Warmth** | 0.05 | Shifts shadow dots warm (positive) or cool (negative). Small values go a long way. |
+| **Accent Amount** | 0.15 | Controls how many complementary-hue accent dots appear. `0` disables accents entirely. |
+| **Accent Hue Shift** | 0.0 | Fine-tunes the accent hue away from the exact complement. |
+
+### Step 4 — Set the canvas
+
+**Canvas Color**: background color visible in gaps between dots. Default is a warm off-white. Change to grey, aged paper, or any base tone you like.
+
+**Canvas Visibility** (`0–1`, default `0.3`): how much canvas shows in bright areas. `0` = fully inked everywhere. `0.5` = bright regions visibly fade to bare canvas.
+
+### Step 5 — Impasto (optional)
+
+**Impasto** (`0–1`, default `0.25`): simulates paint thickness — dot centers slightly brighter, edges slightly darker. Below `0.4` is subtle. Above that it becomes a strong texture effect.
+
+---
+
+### Starter values
+
+| Property | Value |
+|---|---:|
+| Dot Scale | 5 |
+| Dot Sharpness | 1.2 |
+| Exposure | 1.0 |
+| Value Spread | 0.3 |
+| Chroma | 1.2 |
+| Shadow Warmth | 0.05 |
+| Accent Amount | 0.15 |
+| Canvas Color | (0.95, 0.93, 0.88) |
+| Canvas Visibility | 0.3 |
+| Impasto | 0.25 |
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| Too bright / washed out | Lower **Exposure**, or raise **Canvas Visibility** |
+| Colors flat or grey | Raise **Chroma** and/or **Value Spread** |
+| Dots look blurry | Raise **Dot Sharpness** |
+| Accent dots noisy / distracting | Lower **Accent Amount** to `0.05–0.10` |
+| Canvas barely visible | Raise **Canvas Visibility** to `0.4–0.6` |
+| Material turns magenta | Wrong pipeline — this shader requires URP |
+
+---
+
 ## Converting an Existing Material to Dither 3D
 
 ### From Standard (Built-in RP)
@@ -114,6 +183,18 @@ The component automatically finds all materials using a Dither 3D shader (identi
 ## Pointillism: Step-by-Step Setup
 
 Pointillism is an opt-in feature that replaces flat dither output with multi-ink painterly color composition. It's disabled by default and fully backward-compatible.
+
+### How Dots Are Generated (PainterlyCore)
+
+The painterly path uses its own dot-generation system, separate from the Bayer fractal used by the base dithering modes. Dots are placed on a **procedural hexagonal grid** — two staggered rectangular sublattices whose nearest center wins each pixel. Each dot is rendered as a **soft antialiased circle** via a signed-distance field (`smoothstep` on the Euclidean distance to the cell center), giving true round dots at any scale.
+
+Per-dot variation is computed from hash functions (`PainterlyHash21/22`), providing:
+- **Position jitter** (~15%) for a hand-painted, non-mechanical feel
+- **Size variation** (±15%) so no two dots are identical
+
+Four layers (Shadow, Body, Highlight, Accent) each use a rotated UV to stagger their grids, producing side-by-side color mix rather than dot overlap. Layers are composited with soft `lerp` blending — each dot's `[0,1]` coverage value drives the blend weight directly, rather than a hard threshold.
+
+The `_DitherTex` Bayer texture is still declared on the material for property compatibility with the rest of the Dither 3D system, but is not used for dot shape in the painterly path.
 
 ### Step 1 — Enable Pointillism on the Material
 
@@ -368,6 +449,7 @@ Phase Speed = 0.08 | Hysteresis = 0.90 | Min Dot = 0.18
 | File | Purpose |
 |---|---|
 | `Dither3DInclude.cginc` | Core shader include — all dithering and pointillism logic |
+| `PainterlyCore.hlsl` | Painterly rendering core — hex-grid dot generation, OKLab palette, 4-layer compositing |
 | `Dither3DOpaque.shader` | Built-in RP opaque shader |
 | `Dither3DOpaqueURP.shader` | URP opaque shader |
 | `Dither3DCutout.shader` | Alpha-tested shader |
